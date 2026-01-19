@@ -1,0 +1,166 @@
+{
+  "name": "AFR homepage → DailyDigest backend (starter)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.afr.com/",
+        "responseFormat": "string",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Fetch AFR Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        500,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const html = $json.body || $json.data || '';\n\n// Best-effort extraction: find hrefs that look like article URLs.\n// NOTE: AFR markup can change; treat this as a starter.\nconst hrefs = Array.from(html.matchAll(/href=\\\"(\\/[^\\\"#?]+)\\\"/g)).map(m => m[1]);\n\n// Keep only likely article paths (exclude assets and obvious non-articles)\nconst candidates = hrefs\n  .filter(h => typeof h === 'string')\n  .filter(h => !h.startsWith('/static'))\n  .filter(h => !h.endsWith('.css') && !h.endsWith('.js') && !h.endsWith('.png') && !h.endsWith('.jpg') && !h.endsWith('.svg'))\n  .filter(h => h.length > 10)\n  .slice(0, 15);\n\n// Try to grab some titles near links (fallback to URL slug)\nfunction titleFromUrl(u) {\n  const slug = u.split('/').filter(Boolean).pop() || u;\n  return slug.replace(/[-_]/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());\n}\n\nconst uniq = Array.from(new Set(candidates));\n\nreturn uniq.map((path) => {\n  const url = `https://www.afr.com${path}`;\n  return {\n    json: {\n      title: titleFromUrl(path),\n      description: '',\n      imageUrl: '',\n      source: 'AFR',\n      category: 'Business',\n      author: '',\n      publishedAt: new Date().toISOString(),\n      url,\n    },\n  };\n});"
+      },
+      "name": "Extract Article Items",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        740,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        980,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.DAILYDIGEST_BACKEND_ARTICLES_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "={{$env.DAILYDIGEST_WEBHOOK_SECRET}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={{$json}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Upsert into DailyDigest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1220,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch AFR Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch AFR Homepage": {
+      "main": [
+        [
+          {
+            "node": "Extract Article Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Article Items": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Upsert into DailyDigest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert into DailyDigest": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionTimeout": 180
+  }
+}
+
+
+

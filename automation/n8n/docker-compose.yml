@@ -1,0 +1,31 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: dailydigest-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic auth for the editor UI
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+
+      # Host/URL config
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Asia/Kolkata
+
+      # Backend target for our workflows
+      - DAILYDIGEST_BACKEND_ARTICLES_URL=http://host.docker.internal:3001/api/articles
+      - DAILYDIGEST_WEBHOOK_SECRET=dailydigest-n8n-webhook-secret
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
+
+

@@ -1,0 +1,83 @@
+// Prisma Schema for DailyDigest
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  name         String?
+  theme        String      @default("light")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  
+  bookmarks    Bookmark[]
+  likes        Like[]
+
+  @@map("users")
+}
+
+model Article {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   @db.Text
+  content     String?   @db.Text
+  imageUrl    String?   @map("image_url")
+  source      String
+  category    String
+  author      String?
+  publishedAt DateTime? @map("published_at")
+  url         String    @unique
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  bookmarks   Bookmark[]
+  likes       Like[]
+
+  @@index([category])
+  @@index([publishedAt])
+  @@map("articles")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  articleId String   @map("article_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@map("bookmarks")
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  articleId String   @map("article_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@map("likes")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("categories")
+}
+

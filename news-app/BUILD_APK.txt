@@ -1,0 +1,27 @@
+====================================
+🚀 BUILD APK FOR DAILYDIGEST APP
+====================================
+
+Copy and paste these commands one by one:
+
+1. Install EAS CLI (first time only):
+   npm install -g eas-cli
+
+2. Navigate to app folder:
+   cd "C:\Users\Sowjanya Narisetty\Desktop\NewsApplication\news-app"
+
+3. Login to Expo:
+   eas login
+
+4. Build APK:
+   eas build -p android --profile preview
+
+5. Wait for build to complete (10-20 min)
+
+6. Download APK from the link provided
+
+7. Share with friends/testers!
+
+====================================
+
+

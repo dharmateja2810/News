@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+
+# Build files
+build/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# React Native / Expo
+.gradle
+.m2
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+
+# Misc
+.cache/
+.parcel-cache
+dist/
+*.tgz
