@@ -2,7 +2,7 @@
  * Search Screen - Simple Version
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,67 +11,85 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import type { UiArticle } from '../services/articlesApi';
+import { NewsDetailModal } from './NewsDetailModal';
+import { APP_CONFIG } from '../constants/appConfig';
+import { MOCK_ARTICLES } from '../services/mockData';
+import { formatRelativeTime } from '../utils/formatters';
+import type { NewsArticle } from '../types';
 
-// Mock news data for search
-const ALL_NEWS = [
-  {
-    id: '1',
-    title: 'AI Breakthrough: New Language Model Surpasses Human Performance',
-    description: 'Researchers unveil a revolutionary AI system.',
-    imageUrl: 'https://picsum.photos/seed/tech1/400/300',
-    source: 'TechCrunch',
-    category: 'Technology',
-  },
-  {
-    id: '2',
-    title: 'Global Markets Rally as Economic Data Exceeds Expectations',
-    description: 'Stock markets worldwide see significant gains.',
-    imageUrl: 'https://picsum.photos/seed/business1/400/300',
-    source: 'Bloomberg',
-    category: 'Business',
-  },
-  {
-    id: '3',
-    title: 'Championship Victory: Underdog Team Wins Historic Finals',
-    description: 'After trailing for three quarters, underdogs win.',
-    imageUrl: 'https://picsum.photos/seed/sports1/400/300',
-    source: 'ESPN',
-    category: 'Sports',
-  },
-  {
-    id: '4',
-    title: 'New Cancer Treatment Shows 90% Success Rate',
-    description: 'Revolutionary immunotherapy approach offers hope.',
-    imageUrl: 'https://picsum.photos/seed/health1/400/300',
-    source: 'Medical News',
-    category: 'Health',
-  },
-  {
-    id: '5',
-    title: 'Space Telescope Discovers Earth-Like Planets',
-    description: 'Astronomers identify potentially habitable worlds.',
-    imageUrl: 'https://picsum.photos/seed/science1/400/300',
-    source: 'National Geographic',
-    category: 'Science',
-  },
-];
+function mapMockToUi(a: NewsArticle): UiArticle {
+  return {
+    id: a.id,
+    title: a.title,
+    // Prefer full content so the detail modal has enough text.
+    description: a.content || a.description || '',
+    imageUrl: a.imageUrl,
+    source: a.source,
+    category: a.category,
+    time: formatRelativeTime(a.publishedDate),
+    sourceUrl: a.sourceUrl,
+    publishedAt: a.publishedDate,
+    likeCount: 0,
+    bookmarkCount: 0,
+  };
+}
 
 export const SearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const { colors } = useTheme();
+
+  const [results, setResults] = useState<UiArticle[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState<UiArticle | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      void (async () => {
+        setLoading(true);
+        try {
+          if (APP_CONFIG.USE_MOCK_DATA) {
+            const qLower = q.toLowerCase();
+            const filtered = MOCK_ARTICLES.filter((a) => {
+              return (
+                a.title.toLowerCase().includes(qLower) ||
+                a.description.toLowerCase().includes(qLower) ||
+                a.source.toLowerCase().includes(qLower) ||
+                a.category.toLowerCase().includes(qLower)
+              );
+            }).slice(0, 20);
+            setResults(filtered.map(mapMockToUi));
+            return;
+          }
+          // Backend mode (future): use API search here.
+          setResults([]);
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   
-  const filteredNews = searchQuery.trim() === ''
-    ? []
-    : ALL_NEWS.filter(item =>
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-  
-  const renderSearchResult = ({ item }: { item: typeof ALL_NEWS[0] }) => (
-    <TouchableOpacity style={[styles.resultCard, { backgroundColor: colors.surface }]} activeOpacity={0.7}>
+  const renderSearchResult = ({ item }: { item: UiArticle }) => (
+    <TouchableOpacity
+      style={[styles.resultCard, { backgroundColor: colors.surface }]}
+      activeOpacity={0.7}
+      onPress={() => {
+        setSelectedArticle(item);
+        setShowDetailModal(true);
+      }}
+    >
       <Image source={{ uri: item.imageUrl }} style={styles.resultImage} />
       <View style={styles.resultContent}>
         <Text style={styles.resultCategory}>{item.category}</Text>
@@ -118,7 +136,14 @@ export const SearchScreen: React.FC = () => {
             Enter keywords to find articles
           </Text>
         </View>
-      ) : filteredNews.length === 0 ? (
+      ) : loading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 12 }]}>
+            Searching...
+          </Text>
+        </View>
+      ) : results.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="sad-outline" size={64} color={colors.border} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No Results Found</Text>
@@ -128,12 +153,18 @@ export const SearchScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={filteredNews}
+          data={results}
           renderItem={renderSearchResult}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.resultsList}
         />
       )}
+
+      <NewsDetailModal
+        visible={showDetailModal}
+        article={selectedArticle}
+        onClose={() => setShowDetailModal(false)}
+      />
     </View>
   );
 };

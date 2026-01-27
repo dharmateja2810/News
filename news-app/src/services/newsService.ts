@@ -1,14 +1,55 @@
 /**
  * News Service
- * Handles fetching news articles (currently using mock data)
+ * Handles fetching news articles (backend API)
  */
 
 import { NewsArticle, PaginatedResponse } from '../types';
 import { NewsCategory, APP_CONFIG } from '../constants/appConfig';
-import { MOCK_ARTICLES } from './mockData';
+import { api } from './api';
 
-// Simulate network delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+type BackendArticle = {
+  id: string;
+  title: string;
+  description: string | null;
+  content: string | null;
+  imageUrl: string | null;
+  source: string;
+  category: string;
+  author: string | null;
+  publishedAt: string | null;
+  url: string;
+  createdAt: string;
+};
+
+type ArticlesListResponse = {
+  articles: BackendArticle[];
+  pagination: {
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
+};
+
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80';
+
+const mapBackendToNewsArticle = (a: BackendArticle): NewsArticle => {
+  const publishedDate = a.publishedAt || a.createdAt;
+  return {
+    id: a.id,
+    title: a.title,
+    description: a.description || '',
+    content: a.content || undefined,
+    sourceUrl: a.url,
+    imageUrl: a.imageUrl || FALLBACK_IMAGE,
+    source: a.source,
+    author: a.author || undefined,
+    category: (a.category as NewsCategory) || 'All',
+    publishedDate,
+    createdAt: a.createdAt,
+  };
+};
 
 export class NewsService {
   /**
@@ -19,34 +60,23 @@ export class NewsService {
     category: NewsCategory = 'All',
     searchQuery?: string
   ): Promise<PaginatedResponse<NewsArticle>> {
-    // Simulate network delay
-    await delay(800);
-    
-    // Filter articles by category
-    let filteredArticles = category === 'All' 
-      ? MOCK_ARTICLES 
-      : MOCK_ARTICLES.filter(article => article.category === category);
-    
-    // Filter by search query if provided
-    if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filteredArticles = filteredArticles.filter(article =>
-        article.title.toLowerCase().includes(query) ||
-        article.description.toLowerCase().includes(query) ||
-        article.source.toLowerCase().includes(query)
-      );
-    }
-    
-    // Paginate results
     const perPage = APP_CONFIG.NEWS_PER_PAGE;
-    const startIndex = (page - 1) * perPage;
-    const endIndex = startIndex + perPage;
-    const items = filteredArticles.slice(startIndex, endIndex);
-    const hasMore = endIndex < filteredArticles.length;
-    
+
+    const res = await api.get<ArticlesListResponse>('/articles', {
+      params: {
+        page,
+        limit: perPage,
+        category: category === 'All' ? undefined : category,
+        search: searchQuery?.trim() ? searchQuery.trim() : undefined,
+      },
+    });
+
+    const items = res.data.articles.map(mapBackendToNewsArticle);
+    const hasMore = res.data.pagination.page < res.data.pagination.totalPages;
+
     return {
       items,
-      total: filteredArticles.length,
+      total: res.data.pagination.total,
       page,
       perPage,
       hasMore,
@@ -57,24 +87,30 @@ export class NewsService {
    * Fetch a single article by ID
    */
   static async fetchArticleById(id: string): Promise<NewsArticle | null> {
-    await delay(300);
-    return MOCK_ARTICLES.find(article => article.id === id) || null;
+    try {
+      const res = await api.get<BackendArticle>(`/articles/${id}`);
+      return mapBackendToNewsArticle(res.data);
+    } catch {
+      return null;
+    }
   }
   
   /**
    * Get trending/featured articles
    */
   static async fetchTrendingNews(limit: number = 5): Promise<NewsArticle[]> {
-    await delay(500);
-    return MOCK_ARTICLES.slice(0, limit);
+    const res = await api.get<ArticlesListResponse>('/articles', {
+      params: { page: 1, limit },
+    });
+    return res.data.articles.map(mapBackendToNewsArticle);
   }
   
   /**
    * Get articles by IDs (for bookmarks)
    */
   static async fetchArticlesByIds(ids: string[]): Promise<NewsArticle[]> {
-    await delay(400);
-    return MOCK_ARTICLES.filter(article => ids.includes(article.id));
+    const results = await Promise.all(ids.map((id) => NewsService.fetchArticleById(id)));
+    return results.filter(Boolean) as NewsArticle[];
   }
 }
 

@@ -197,10 +197,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   title: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: 8,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   description: {
     fontSize: 14,
@@ -259,7 +259,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignSelf: 'flex-start',
     marginBottom: 12,
-    backdropFilter: 'blur(10px)',
   },
   categoryText: {
     fontSize: 12,
@@ -267,9 +266,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   featuredTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
-    lineHeight: 32,
+    lineHeight: 30,
     marginBottom: 12,
   },
   featuredMeta: {
@@ -287,7 +286,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.3)',
     borderRadius: 20,
     padding: 8,
-    backdropFilter: 'blur(10px)',
   },
   
   // Compact Card Styles
@@ -309,9 +307,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   compactTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    lineHeight: 20,
+    lineHeight: 19,
     marginBottom: 4,
   },
   compactMeta: {

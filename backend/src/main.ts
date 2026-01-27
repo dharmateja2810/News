@@ -7,8 +7,19 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS
+  // Note: Using `origin: '*'` with `credentials: true` is invalid in browsers.
+  // For local dev, we reflect the request origin (origin: true). If you want to lock
+  // this down, set `CORS_ORIGIN` to a comma-separated allowlist.
+  const corsOriginEnv = process.env.CORS_ORIGIN;
+  const origin = corsOriginEnv
+    ? corsOriginEnv
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : true;
+
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
+    origin,
     credentials: true,
   });
 

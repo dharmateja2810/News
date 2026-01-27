@@ -6,9 +6,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
+import { updateTheme } from '../services/usersApi';
 
 export const ProfileScreen: React.FC = () => {
   const { isDark, toggleTheme, colors } = useTheme();
+  const { user, logout, setUser } = useAuth();
   
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -20,10 +23,10 @@ export const ProfileScreen: React.FC = () => {
         {/* Profile Info */}
         <View style={[styles.profileCard, { backgroundColor: colors.surface }]}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>U</Text>
+            <Text style={styles.avatarText}>{(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}</Text>
           </View>
-          <Text style={[styles.name, { color: colors.text }]}>User Name</Text>
-          <Text style={[styles.email, { color: colors.textSecondary }]}>user@example.com</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{user?.name || 'User'}</Text>
+          <Text style={[styles.email, { color: colors.textSecondary }]}>{user?.email || ''}</Text>
         </View>
         
         {/* Menu Items */}
@@ -42,7 +45,17 @@ export const ProfileScreen: React.FC = () => {
             </View>
             <Switch
               value={isDark}
-              onValueChange={toggleTheme}
+              onValueChange={async (next) => {
+                // Update UI immediately
+                toggleTheme();
+                // Sync to backend (best-effort)
+                try {
+                  const updated = await updateTheme(next ? 'dark' : 'light');
+                  await setUser(updated);
+                } catch {
+                  // ignore; local preference still applies
+                }
+              }}
               trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor="#fff"
             />
@@ -62,7 +75,10 @@ export const ProfileScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
           
-          <TouchableOpacity style={[styles.menuItem, styles.logoutItem]}>
+          <TouchableOpacity
+            style={[styles.menuItem, styles.logoutItem]}
+            onPress={() => void logout()}
+          >
             <Ionicons name="log-out-outline" size={24} color="#ef4444" style={styles.menuIcon} />
             <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
           </TouchableOpacity>

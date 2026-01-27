@@ -10,9 +10,17 @@ export const APP_CONFIG = {
   APP_DESCRIPTION: 'Stay informed with the latest news from around the world',
   
   // API Configuration
-  API_BASE_URL: __DEV__ 
-    ? 'http://localhost:3000/api' 
-    : 'https://api.dailydigest.com',
+  // You can override this in Expo by setting:
+  // EXPO_PUBLIC_API_URL=http://<your-laptop-ip>:3001/api
+  // Notes:
+  // - Android Emulator uses: http://10.0.2.2:3001/api
+  // - Real device must use your LAN IP, not localhost
+  API_BASE_URL:
+    (process.env.EXPO_PUBLIC_API_URL as string | undefined) ||
+    (__DEV__ ? 'http://localhost:3001/api' : 'https://api.dailydigest.com'),
+
+  // Development: use local mock articles instead of backend API
+  USE_MOCK_DATA: true,
   
   // Rate Limiting
   RATE_LIMIT_REQUESTS: 100,

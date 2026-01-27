@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Modal,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
@@ -29,6 +30,7 @@ interface NewsDetailModalProps {
     source: string;
     category: string;
     time?: string;
+    sourceUrl?: string;
   } | null;
   onClose: () => void;
 }
@@ -66,7 +68,7 @@ export const NewsDetailModal: React.FC<NewsDetailModalProps> = ({
             {/* Save Button */}
             <TouchableOpacity 
               style={styles.saveButton}
-              onPress={() => toggleSave(article.id)}
+              onPress={() => void toggleSave(article.id)}
             >
               <Ionicons 
                 name={articleIsSaved ? 'bookmark' : 'bookmark-outline'} 
@@ -99,11 +101,15 @@ export const NewsDetailModal: React.FC<NewsDetailModalProps> = ({
             
             {/* Description */}
             <Text style={[styles.description, { color: colors.text }]}>{article.description}</Text>
-            
-            {/* Additional content placeholder */}
-            <Text style={[styles.bodyText, { color: colors.textSecondary }]}>
-              This is a detailed view of the article. In a production app, this would display the full article content fetched from your backend API. You can add more paragraphs, images, videos, and interactive elements here.
-            </Text>
+
+            {!!article.sourceUrl && (
+              <TouchableOpacity
+                style={[styles.openButton, { backgroundColor: colors.accent }]}
+                onPress={() => void Linking.openURL(article.sourceUrl!)}
+              >
+                <Text style={styles.openButtonText}>Open original</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -165,9 +171,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
-    lineHeight: 36,
+    lineHeight: 32,
     marginBottom: 16,
   },
   meta: {
@@ -194,6 +200,17 @@ const styles = StyleSheet.create({
   bodyText: {
     fontSize: 16,
     lineHeight: 24,
+  },
+  openButton: {
+    marginTop: 20,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  openButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
 

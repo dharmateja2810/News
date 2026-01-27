@@ -2,96 +2,67 @@
  * Bookmarks Screen - Shows Saved Articles
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { NewsDetailModal } from './NewsDetailModal';
 import { useTheme } from '../contexts/ThemeContext';
+import type { UiArticle } from '../services/articlesApi';
+import { APP_CONFIG } from '../constants/appConfig';
+import { MOCK_ARTICLES } from '../services/mockData';
+import { formatRelativeTime } from '../utils/formatters';
+import type { NewsArticle } from '../types';
 
-// Import the same news data
-const ALL_NEWS = [
-  {
-    id: '1',
-    title: 'AI Breakthrough: New Language Model Surpasses Human Performance',
-    description: 'Researchers unveil a revolutionary AI system.',
-    imageUrl: 'https://picsum.photos/seed/tech1/400/300',
-    source: 'TechCrunch',
-    category: 'Technology',
-  },
-  {
-    id: '2',
-    title: 'Global Markets Rally as Economic Data Exceeds Expectations',
-    description: 'Stock markets worldwide see significant gains.',
-    imageUrl: 'https://picsum.photos/seed/business1/400/300',
-    source: 'Bloomberg',
-    category: 'Business',
-  },
-  {
-    id: '3',
-    title: 'Championship Victory: Underdog Team Wins Historic Finals',
-    description: 'After trailing for three quarters, underdogs win.',
-    imageUrl: 'https://picsum.photos/seed/sports1/400/300',
-    source: 'ESPN',
-    category: 'Sports',
-  },
-  {
-    id: '4',
-    title: 'New Cancer Treatment Shows 90% Success Rate',
-    description: 'Revolutionary immunotherapy approach offers hope.',
-    imageUrl: 'https://picsum.photos/seed/health1/400/300',
-    source: 'Medical News',
-    category: 'Health',
-  },
-  {
-    id: '5',
-    title: 'Space Telescope Discovers Earth-Like Planets',
-    description: 'Astronomers identify potentially habitable worlds.',
-    imageUrl: 'https://picsum.photos/seed/science1/400/300',
-    source: 'National Geographic',
-    category: 'Science',
-  },
-  {
-    id: '6',
-    title: 'Electric Vehicle Sales Surge 150% as Battery Technology Improves',
-    description: 'New lithium-silicon batteries promise 500-mile range.',
-    imageUrl: 'https://picsum.photos/seed/tech2/400/300',
-    source: 'TechCrunch',
-    category: 'Technology',
-  },
-  {
-    id: '7',
-    title: 'Startup Valued at $10 Billion After Revolutionary Healthcare Platform Launch',
-    description: 'Healthcare technology company achieves unicorn status.',
-    imageUrl: 'https://picsum.photos/seed/business2/400/300',
-    source: 'Forbes',
-    category: 'Business',
-  },
-  {
-    id: '8',
-    title: 'Olympic Committee Announces New Sports for 2028 Games',
-    description: 'Breaking, skateboarding, and esports among additions.',
-    imageUrl: 'https://picsum.photos/seed/sports2/400/300',
-    source: 'ESPN',
-    category: 'Sports',
-  },
-];
+function mapMockToUi(a: NewsArticle): UiArticle {
+  return {
+    id: a.id,
+    title: a.title,
+    // Prefer full content so the detail modal has enough text.
+    description: a.content || a.description || '',
+    imageUrl: a.imageUrl,
+    source: a.source,
+    category: a.category,
+    time: formatRelativeTime(a.publishedDate),
+    sourceUrl: a.sourceUrl,
+    publishedAt: a.publishedDate,
+    likeCount: 0,
+    bookmarkCount: 0,
+  };
+}
 
 export const BookmarksScreen: React.FC = () => {
-  const { savedArticleIds, toggleSave } = useSavedArticles();
-  const [selectedArticle, setSelectedArticle] = useState<typeof ALL_NEWS[0] | null>(null);
+  const { savedArticleIds, toggleSave, isLoading: bookmarksLoading } = useSavedArticles();
+  const [savedArticles, setSavedArticles] = useState<UiArticle[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState<UiArticle | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const { colors } = useTheme();
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      try {
+        if (APP_CONFIG.USE_MOCK_DATA) {
+          const ids = savedArticleIds;
+          const filtered = MOCK_ARTICLES.filter((a) => ids.has(a.id));
+          setSavedArticles(filtered.map(mapMockToUi));
+          return;
+        }
+        // Backend mode (future): fetch saved articles from API.
+        setSavedArticles([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [savedArticleIds]);
   
-  // Filter articles to show only saved ones
-  const savedArticles = ALL_NEWS.filter(article => savedArticleIds.has(article.id));
-  
-  const handleArticlePress = (article: typeof ALL_NEWS[0]) => {
+  const handleArticlePress = (article: UiArticle) => {
     setSelectedArticle(article);
     setShowDetailModal(true);
   };
   
-  const renderSavedArticle = ({ item }: { item: typeof ALL_NEWS[0] }) => (
+  const renderSavedArticle = ({ item }: { item: UiArticle }) => (
     <TouchableOpacity 
       style={[styles.articleCard, { backgroundColor: colors.surface }]}
       onPress={() => handleArticlePress(item)}
@@ -109,7 +80,7 @@ export const BookmarksScreen: React.FC = () => {
         style={styles.unsaveButton}
         onPress={(e) => {
           e.stopPropagation();
-          toggleSave(item.id);
+          void toggleSave(item.id);
         }}
       >
         <Ionicons name="bookmark" size={24} color={colors.accent} />
@@ -124,7 +95,14 @@ export const BookmarksScreen: React.FC = () => {
         <Text style={[styles.headerCount, { color: colors.textSecondary }]}>{savedArticles.length} saved</Text>
       </View>
       
-      {savedArticles.length === 0 ? (
+      {loading || bookmarksLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 12 }]}>
+            Loading saved articles...
+          </Text>
+        </View>
+      ) : savedArticles.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="bookmark-outline" size={64} color={colors.border} />
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No Saved Articles Yet</Text>

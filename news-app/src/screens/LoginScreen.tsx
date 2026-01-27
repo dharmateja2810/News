@@ -21,6 +21,11 @@ import { useAuthStore } from '../store';
 import { Ionicons } from '@expo/vector-icons';
 import { APP_CONFIG } from '../constants/appConfig';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SecureStore from 'expo-secure-store';
+import { loginApi } from '../services/authApi';
+import { setApiAccessToken } from '../services/api';
+
+const TOKEN_KEY = 'dailydigest_jwt';
 
 export const LoginScreen: React.FC = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -40,25 +45,37 @@ export const LoginScreen: React.FC = () => {
     
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      // Mock successful login
-      const mockUser = {
-        id: '1',
-        email,
-        name: email.split('@')[0],
+    try {
+      const res = await loginApi(email.trim(), password);
+
+      // Persist token securely for the shared Axios client
+      await SecureStore.setItemAsync(TOKEN_KEY, res.token);
+      setApiAccessToken(res.token);
+
+      // Adapt backend token to the legacy store shape
+      const userForStore = {
+        id: res.user.id,
+        email: res.user.email,
+        name: res.user.name || undefined,
         createdAt: new Date().toISOString(),
       };
-      
-      const mockTokens = {
-        accessToken: 'mock_access_token',
-        refreshToken: 'mock_refresh_token',
-        expiresAt: Date.now() + 3600000,
+
+      const tokensForStore = {
+        accessToken: res.token,
+        refreshToken: '',
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // JWT defaults to 7d on backend
       };
-      
-      login(mockUser, mockTokens);
+
+      login(userForStore as any, tokensForStore as any);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        'Login failed. Please check your credentials.';
+      Alert.alert('Error', String(msg));
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
   
   const handleOAuthLogin = (provider: 'google' | 'github') => {

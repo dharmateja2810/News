@@ -220,9 +220,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
-    lineHeight: 36,
+    lineHeight: 32,
     marginBottom: 16,
   },
   meta: {
