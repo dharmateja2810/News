@@ -22,13 +22,25 @@
       },
       "package": "com.dailydigest.app",
       "versionCode": 1,
-      "permissions": ["INTERNET"]
+      "permissions": [
+        "INTERNET",
+        "INTERNET"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "appName": "DailyDigest"
+      "appName": "DailyDigest",
+      "eas": {
+        "projectId": "580fefb6-935e-40cf-80aa-85e3eb8b5988"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/580fefb6-935e-40cf-80aa-85e3eb8b5988"
     }
   }
 }
