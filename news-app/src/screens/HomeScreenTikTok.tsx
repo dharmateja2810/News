@@ -16,11 +16,9 @@ import {
   ActivityIndicator,
   Share,
   Linking,
-  SafeAreaView,
-  Platform,
-  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
@@ -30,8 +28,6 @@ import { formatRelativeTime } from '../utils/formatters';
 import type { NewsArticle } from '../types';
 
 const { width, height } = Dimensions.get('window');
-const IMAGE_HEIGHT = height * 0.44;
-const CONTENT_HEIGHT = height - IMAGE_HEIGHT;
 
 const CATEGORIES = [...NEWS_CATEGORIES];
 
@@ -53,6 +49,7 @@ function mapMockToUi(a: NewsArticle): UiArticle {
 }
 
 export const HomeScreenTikTok: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
@@ -60,7 +57,12 @@ export const HomeScreenTikTok: React.FC = () => {
   const { colors } = useTheme();
   const lastTapRef = React.useRef<{ [key: string]: number }>({});
   const listRef = React.useRef<FlatList<UiArticle>>(null);
-  const topTabsOffset = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0;
+
+  // Measure the available height for a single "page" so content isn't hidden behind the bottom tab bar.
+  const [pageHeight, setPageHeight] = useState(height);
+  // Reduce image height by ~20% (44% -> 35.2% of page height)
+  const imageHeight = Math.round(pageHeight * 0.352);
+  const contentHeight = Math.max(0, pageHeight - imageHeight);
 
   const [articles, setArticles] = useState<UiArticle[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -147,12 +149,14 @@ export const HomeScreenTikTok: React.FC = () => {
     const isLiked = likedArticles.has(item.id);
     const articleIsSaved = isSaved(item.id);
     const likeCount = item.likeCount ?? 0;
+    const titleWords = item.title.trim().split(/\s+/).filter(Boolean).length;
+    const titleLines = titleWords > 10 ? 3 : 2;
     
     return (
-      <View style={styles.newsItem}>
+      <View style={[styles.newsItem, { height: pageHeight }]}>
         {/* Top Half - Image */}
         <TouchableOpacity 
-          style={styles.imageContainer}
+          style={[styles.imageContainer, { height: imageHeight }]}
           activeOpacity={1}
           onPress={() => handleDoubleTap(item.id)}
         >
@@ -160,42 +164,42 @@ export const HomeScreenTikTok: React.FC = () => {
         </TouchableOpacity>
         
         {/* Bottom Half - Content */}
-        <View style={[styles.contentContainer, { backgroundColor: colors.background }]}>
+        <View style={[styles.contentContainer, { backgroundColor: colors.background, height: contentHeight }]}>
           {/* Title */}
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={titleLines}>
             {item.title}
           </Text>
           
           {/* Description */}
           {(() => {
             const full = (item.description || '').trim();
-            // Keep the card readable and guarantee it fits on screen.
-            const PREVIEW_CHAR_LIMIT = 900;
-            const isTruncated = full.length > PREVIEW_CHAR_LIMIT;
-            const preview = isTruncated ? `${full.slice(0, PREVIEW_CHAR_LIMIT).trimEnd()}…` : full;
+            // Cap by word count so we don't show "..."/ellipsis and we keep layout stable.
+            const MAX_WORDS = 140;
+            const words = full.split(/\s+/).filter(Boolean);
+            const preview = words.slice(0, MAX_WORDS).join(' ');
             return (
               <View style={styles.descriptionContainer}>
                 <Text
                   style={[styles.description, { color: colors.textSecondary }]}
-                  numberOfLines={12}
-                  ellipsizeMode="tail"
+                  numberOfLines={16}
+                  ellipsizeMode="clip"
                 >
                   {preview}
                 </Text>
+
+                {/* Meta Info (right after text, not stuck at bottom) */}
+                <View style={styles.meta}>
+                  <Text style={[styles.source, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {item.source}
+                  </Text>
+                  <Text style={[styles.dot, { color: colors.border }]}>•</Text>
+                  <Text style={[styles.time, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {item.time || ' '}
+                  </Text>
+                </View>
               </View>
             );
           })()}
-          
-          {/* Meta Info */}
-          <View style={styles.meta}>
-            <Text style={[styles.source, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.source}
-            </Text>
-            <Text style={[styles.dot, { color: colors.border }]}>•</Text>
-            <Text style={[styles.time, { color: colors.textSecondary }]} numberOfLines={1}>
-              {item.time || ' '}
-            </Text>
-          </View>
 
           {/* Right-side vertical actions (start aligned with title) */}
           <View style={styles.rightActions}>
@@ -247,92 +251,98 @@ export const HomeScreenTikTok: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Top category tabs (Inshorts-style) */}
-      <SafeAreaView style={styles.tabsSafeArea} pointerEvents="box-none">
-        <View style={[styles.tabsBar, { paddingTop: topTabsOffset + 6 }]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabsContent}
-          >
-            {CATEGORIES.map((category) => {
-              const active = selectedCategory === category;
-              return (
-                <TouchableOpacity
-                  key={category}
-                  style={styles.tabItem}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setSelectedCategory(category);
-                    setCurrentIndex(0);
-                    listRef.current?.scrollToOffset({ offset: 0, animated: false });
-                  }}
+      <SafeAreaView edges={['top']} style={styles.tabsBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}
+        >
+          {CATEGORIES.map((category) => {
+            const active = selectedCategory === category;
+            return (
+              <TouchableOpacity
+                key={category}
+                style={styles.tabItem}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setSelectedCategory(category);
+                  setCurrentIndex(0);
+                  listRef.current?.scrollToOffset({ offset: 0, animated: false });
+                }}
+              >
+                <Text
+                  style={[
+                    styles.tabText,
+                    { color: active ? colors.accent : 'rgba(255,255,255,0.65)' },
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      { color: active ? colors.accent : 'rgba(255,255,255,0.65)' },
-                    ]}
-                  >
-                    {category === 'All' ? 'My Feed' : category}
-                  </Text>
-                  {active ? (
-                    <View style={[styles.tabUnderline, { backgroundColor: colors.accent }]} />
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+                  {category === 'All' ? 'My Feed' : category}
+                </Text>
+                {active ? (
+                  <View style={[styles.tabUnderline, { backgroundColor: colors.accent }]} />
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </SafeAreaView>
 
-      {/* Full-Screen Vertical Scroll */}
-      {isLoading && articles.length === 0 ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading news...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={articles}
-          renderItem={renderNewsItem}
-          keyExtractor={(item) => item.id}
-          pagingEnabled
-          showsVerticalScrollIndicator={false}
-          snapToInterval={height}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          getItemLayout={(data, index) => ({
-            length: height,
-            offset: height * index,
-            index,
-          })}
-          onEndReached={() => {
-            // Backend mode (future): paging can be re-enabled here.
-            if (!isLoading && hasMore) return;
-          }}
-          onEndReachedThreshold={0.5}
-          refreshing={isRefreshing}
-          onRefresh={onRefresh}
-          ListEmptyComponent={
-            <View style={styles.loading}>
-              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                No articles found.
-              </Text>
-              <TouchableOpacity
-                onPress={() => void onRefresh()}
-                style={[styles.retryButton, { borderColor: colors.border }]}
-              >
-                <Text style={[styles.retryText, { color: colors.text }]}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
-      )}
+      {/* Full-Screen Vertical Scroll (measured so bottom tab bar doesn't cover content) */}
+      <View
+        style={styles.listArea}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0) setPageHeight(h);
+        }}
+      >
+        {isLoading && articles.length === 0 ? (
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading news...
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={articles}
+            renderItem={renderNewsItem}
+            keyExtractor={(item) => item.id}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            snapToInterval={pageHeight}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            getItemLayout={(data, index) => ({
+              length: pageHeight,
+              offset: pageHeight * index,
+              index,
+            })}
+            onEndReached={() => {
+              // Backend mode (future): paging can be re-enabled here.
+              if (!isLoading && hasMore) return;
+            }}
+            onEndReachedThreshold={0.5}
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            ListEmptyComponent={
+              <View style={styles.loading}>
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                  No articles found.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => void onRefresh()}
+                  style={[styles.retryButton, { borderColor: colors.border }]}
+                >
+                  <Text style={[styles.retryText, { color: colors.text }]}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        )}
+      </View>
     </View>
   );
 };
@@ -341,13 +351,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  tabsSafeArea: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 50,
   },
   tabsBar: {
     backgroundColor: 'rgba(0,0,0,0.85)',
@@ -372,12 +375,13 @@ const styles = StyleSheet.create({
     width: 26,
     borderRadius: 3,
   },
+  listArea: {
+    flex: 1,
+  },
   newsItem: {
     width,
-    height,
   },
   imageContainer: {
-    height: IMAGE_HEIGHT,
     width: '100%',
   },
   newsImage: {
@@ -386,7 +390,6 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   contentContainer: {
-    height: CONTENT_HEIGHT,
     padding: 20,
     paddingRight: 80,
     paddingBottom: 28,
@@ -399,16 +402,17 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
   description: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 8,
   },
   descriptionContainer: {
-    flex: 1,
+    // Don't use flex:1 here, otherwise the meta row gets pushed to the bottom.
   },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
   },
   source: {
     fontSize: 14,

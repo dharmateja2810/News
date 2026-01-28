@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { View, StyleSheet, StatusBar, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { HomeScreenTikTok } from './src/screens/HomeScreenTikTok';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { BookmarksScreen } from './src/screens/BookmarksScreen';
@@ -62,13 +63,15 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <SavedArticlesProvider>
-          <AppContent />
-        </SavedArticlesProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <SavedArticlesProvider>
+            <AppContent />
+          </SavedArticlesProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
 
