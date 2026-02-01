@@ -23,7 +23,7 @@ function AppContent() {
 
   // TEMP: Disable login screen / auth-gating (always show app).
   // Flip to `false` to re-enable authentication.
-  const DISABLE_AUTH_FOR_NOW = true;
+  const DISABLE_AUTH_FOR_NOW = false;
   
   const renderScreen = () => {
     switch (activeTab) {

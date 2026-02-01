@@ -17,10 +17,10 @@ export const APP_CONFIG = {
   // - Real device must use your LAN IP, not localhost
   API_BASE_URL:
     (process.env.EXPO_PUBLIC_API_URL as string | undefined) ||
-    (__DEV__ ? 'http://localhost:3001/api' : 'https://api.dailydigest.com'),
+    (__DEV__ ? 'http://10.156.21.125:3001/api' : 'https://api.dailydigest.com'),
 
   // Development: use local mock articles instead of backend API
-  USE_MOCK_DATA: true,
+  USE_MOCK_DATA: false,
   
   // Rate Limiting
   RATE_LIMIT_REQUESTS: 100,

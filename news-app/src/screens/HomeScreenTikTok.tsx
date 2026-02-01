@@ -391,7 +391,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
-    paddingRight: 80,
     paddingBottom: 28,
     overflow: 'hidden',
   },
@@ -405,9 +404,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 8,
+    textAlign: 'justify',
   },
   descriptionContainer: {
     // Don't use flex:1 here, otherwise the meta row gets pushed to the bottom.
+    paddingRight: 60,
   },
   meta: {
     flexDirection: 'row',
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
   rightActions: {
     position: 'absolute',
     right: 12,
-    top: 20,
+    top: 78,
     alignItems: 'center',
     gap: 14,
   },
