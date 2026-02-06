@@ -37,13 +37,64 @@
     },
     {
       "parameters": {
-        "functionCode": "const html = $json.body || $json.data || '';\n\n// Best-effort extraction: find hrefs that look like article URLs.\n// NOTE: AFR markup can change; treat this as a starter.\nconst hrefs = Array.from(html.matchAll(/href=\\\"(\\/[^\\\"#?]+)\\\"/g)).map(m => m[1]);\n\n// Keep only likely article paths (exclude assets and obvious non-articles)\nconst candidates = hrefs\n  .filter(h => typeof h === 'string')\n  .filter(h => !h.startsWith('/static'))\n  .filter(h => !h.endsWith('.css') && !h.endsWith('.js') && !h.endsWith('.png') && !h.endsWith('.jpg') && !h.endsWith('.svg'))\n  .filter(h => h.length > 10)\n  .slice(0, 15);\n\n// Try to grab some titles near links (fallback to URL slug)\nfunction titleFromUrl(u) {\n  const slug = u.split('/').filter(Boolean).pop() || u;\n  return slug.replace(/[-_]/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());\n}\n\nconst uniq = Array.from(new Set(candidates));\n\nreturn uniq.map((path) => {\n  const url = `https://www.afr.com${path}`;\n  const seed = encodeURIComponent(path);\n  const imageUrl = `https://picsum.photos/seed/${seed}/1080/720`;\n  return {\n    json: {\n      title: titleFromUrl(path),\n      description: '',\n      imageUrl,\n      source: 'AFR',\n      category: 'Business',\n      author: '',\n      publishedAt: new Date().toISOString(),\n      url,\n    },\n  };\n});"
+        "functionCode": "const raw = $json.body ?? $json.data ?? $json ?? '';\nconst html = typeof raw === 'string' ? raw : JSON.stringify(raw);\n\n// Best-effort extraction: match hrefs with single/double quotes and relative/absolute URLs.\nconst hrefRegex = /href\\s*=\\s*[\"']([^\"'#]+)[\"']/gi;\nconst hrefs = [];\nlet match;\nwhile ((match = hrefRegex.exec(html)) !== null) {\n  hrefs.push(match[1]);\n}\n\nconst normalized = hrefs\n  .map((h) => {\n    if (!h || typeof h !== 'string') return null;\n    if (h.startsWith('//')) return `https:${h}`;\n    if (h.startsWith('http')) return h;\n    if (h.startsWith('/')) return `https://www.afr.com${h}`;\n    return null;\n  })\n  .filter(Boolean);\n\n// Keep only likely article URLs (exclude assets and obvious non-articles)\nconst candidates = normalized\n  .filter((u) => u.includes('afr.com'))\n  .filter((u) => !u.includes('/static/'))\n  .filter((u) => !/\\.(css|js|png|jpe?g|svg|gif|webp)(\\?|$)/i.test(u))\n  .filter((u) => !u.includes('/subscribe') && !u.includes('/login'))\n  .filter((u) => u.split('/').length > 4)\n  .slice(0, 12);\n\nfunction titleFromUrl(url) {\n  try {\n    const path = new URL(url).pathname;\n    const slug = path.split('/').filter(Boolean).pop() || url;\n    return slug.replace(/[-_]/g, ' ').replace(/\\b\\w/g, (c) => c.toUpperCase());\n  } catch {\n    const slug = url.split('/').filter(Boolean).pop() || url;\n    return slug.replace(/[-_]/g, ' ').replace(/\\b\\w/g, (c) => c.toUpperCase());\n  }\n}\n\nfunction stripTags(s) {\n  return s.replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction getMeta(htmlStr, name) {\n  const re = new RegExp(`<meta[^>]+name=[\"']${name}[\"'][^>]+content=[\"']([^\"']+)[\"']`, 'i');\n  const m = htmlStr.match(re);\n  return m ? m[1].trim() : '';\n}\n\nfunction getOg(htmlStr, prop) {\n  const re = new RegExp(`<meta[^>]+property=[\"']${prop}[\"'][^>]+content=[\"']([^\"']+)[\"']`, 'i');\n  const m = htmlStr.match(re);\n  return m ? m[1].trim() : '';\n}\n\nfunction getTitleTag(htmlStr) {\n  const m = htmlStr.match(/<title[^>]*>([^<]+)<\\/title>/i);\n  return m ? m[1].trim() : '';\n}\n\nasync function fetchHtml(url) {\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url,\n      timeout: 30000,\n      headers: {\n        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',\n      },\n    });\n    return typeof res === 'string' ? res : JSON.stringify(res);\n  } catch (e) {\n    return '';\n  }\n}\n\nconst uniq = Array.from(new Set(candidates));\nconst items = [];\n\nfor (const url of uniq) {\n  const page = await fetchHtml.call(this, url);\n  const seed = encodeURIComponent(url);\n  const paragraphs = Array.from(page.matchAll(/<p[^>]*>(.*?)<\\/p>/gi))\n    .map((m) => stripTags(m[1]))\n    .filter((p) => p.length > 60);\n  const content = paragraphs.slice(0, 5).join('\\n\\n');\n\n  const title = getOg(page, 'og:title') || getMeta(page, 'twitter:title') || getTitleTag(page) || titleFromUrl(url);\n  const description = getOg(page, 'og:description') || getMeta(page, 'description') || paragraphs[0] || '';\n  const imageUrl = getOg(page, 'og:image') || getMeta(page, 'twitter:image') || `https://picsum.photos/seed/${seed}/1080/720`;\n  const author = getMeta(page, 'author') || getOg(page, 'article:author') || '';\n  const publishedAt = getOg(page, 'article:published_time') || new Date().toISOString();\n\n  items.push({\n    json: {\n      title,\n      description,\n      content,\n      imageUrl,\n      source: 'AFR',\n      category: 'Business',\n      author,\n      publishedAt,\n      url,\n    },\n  });\n}\n\nreturn items;"
       },
       "name": "Extract Article Items",
       "type": "n8n-nodes-base.function",
       "typeVersion": 2,
       "position": [
         740,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={{$env.GEMINI_API_KEY}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "jsonBody": "={\"contents\":[{\"parts\":[{\"text\":\"Summarize the following news article in 3-5 sentences. Keep it neutral, factual, and concise. If the content is short, produce 2-3 sentences.\\n\\nTITLE: {{$json.title}}\\n\\nCONTENT: {{$json.content || $json.description || ''}}\"}]}]}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Summarize with Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        980,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex"
+      },
+      "name": "Merge Article + Summary",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const summary = $json.candidates?.[0]?.content?.parts?.[0]?.text || '';\n\nreturn [\n  {\n    json: {\n      title: $json.title,\n      description: $json.description || '',\n      content: summary || $json.content || '',\n      imageUrl: $json.imageUrl || '',\n      source: $json.source || 'AFR',\n      category: $json.category || 'Business',\n      author: $json.author || '',\n      publishedAt: $json.publishedAt || new Date().toISOString(),\n      url: $json.url,\n    },\n  },\n];"
+      },
+      "name": "Build Article Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [
+        1400,
         220
       ]
     },
@@ -56,7 +107,7 @@
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
       "position": [
-        980,
+        1600,
         220
       ]
     },
@@ -87,7 +138,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1220,
+        1840,
         220
       ]
     }
@@ -116,6 +167,46 @@
       ]
     },
     "Extract Article Items": {
+      "main": [
+        [
+          {
+            "node": "Summarize with Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Article + Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize with Gemini": {
+      "main": [
+        [
+          {
+            "node": "Merge Article + Summary",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Article + Summary": {
+      "main": [
+        [
+          {
+            "node": "Build Article Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Article Payload": {
       "main": [
         [
           {

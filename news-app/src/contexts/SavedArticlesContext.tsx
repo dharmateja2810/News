@@ -4,12 +4,8 @@
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { toggleBookmark, listBookmarks } from '../services/bookmarksApi';
 import { useAuth } from './AuthContext';
-import { APP_CONFIG } from '../constants/appConfig';
-
-const LOCAL_SAVED_KEY = 'dd:saved_article_ids';
 
 interface SavedArticlesContextType {
   savedArticleIds: Set<string>;
@@ -27,13 +23,6 @@ export const SavedArticlesProvider: React.FC<{ children: React.ReactNode }> = ({
   const [savedArticleIds, setSavedArticleIds] = useState<Set<string>>(new Set());
 
   const refresh = async () => {
-    if (APP_CONFIG.USE_MOCK_DATA) {
-      const raw = await AsyncStorage.getItem(LOCAL_SAVED_KEY);
-      const ids = raw ? (JSON.parse(raw) as string[]) : [];
-      setSavedArticleIds(new Set(ids));
-      return;
-    }
-
     if (!token) {
       setSavedArticleIds(new Set());
       return;
@@ -42,6 +31,8 @@ export const SavedArticlesProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const articles = await listBookmarks();
       setSavedArticleIds(new Set(articles.map((a) => a.id)));
+    } catch (error) {
+      console.error('Error loading bookmarks:', error);
     } finally {
       setIsLoading(false);
     }
@@ -53,17 +44,6 @@ export const SavedArticlesProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [token]);
   
   const toggleSave = async (articleId: string) => {
-    if (APP_CONFIG.USE_MOCK_DATA) {
-      setSavedArticleIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(articleId)) next.delete(articleId);
-        else next.add(articleId);
-        void AsyncStorage.setItem(LOCAL_SAVED_KEY, JSON.stringify([...next]));
-        return next;
-      });
-      return;
-    }
-
     if (!token) return;
 
     // Optimistic update

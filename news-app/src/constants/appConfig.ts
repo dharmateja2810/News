@@ -3,6 +3,28 @@
  * Centralized configuration to make app rebranding easy
  */
 
+import { Platform } from 'react-native';
+
+// Determine API URL based on platform
+const getApiBaseUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  if (!__DEV__) {
+    return 'https://api.dailydigest.com';
+  }
+  // Development mode - pick the right URL for each platform
+  if (Platform.OS === 'web') {
+    return 'http://localhost:3001/api';
+  }
+  if (Platform.OS === 'android') {
+    // Android emulator uses 10.0.2.2 to reach host machine
+    return 'http://10.0.2.2:3001/api';
+  }
+  // iOS simulator / real device - use LAN IP
+  return 'http://192.168.1.18:3001/api';
+};
+
 export const APP_CONFIG = {
   // App Identity - Change these values to rebrand the app
   APP_NAME: 'DailyDigest',
@@ -10,17 +32,7 @@ export const APP_CONFIG = {
   APP_DESCRIPTION: 'Stay informed with the latest news from around the world',
   
   // API Configuration
-  // You can override this in Expo by setting:
-  // EXPO_PUBLIC_API_URL=http://<your-laptop-ip>:3001/api
-  // Notes:
-  // - Android Emulator uses: http://10.0.2.2:3001/api
-  // - Real device must use your LAN IP, not localhost
-  API_BASE_URL:
-    (process.env.EXPO_PUBLIC_API_URL as string | undefined) ||
-    (__DEV__ ? 'http://10.156.21.125:3001/api' : 'https://api.dailydigest.com'),
-
-  // Development: use local mock articles instead of backend API
-  USE_MOCK_DATA: false,
+  API_BASE_URL: getApiBaseUrl(),
   
   // Rate Limiting
   RATE_LIMIT_REQUESTS: 100,

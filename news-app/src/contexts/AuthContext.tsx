@@ -1,10 +1,11 @@
 /**
  * Auth Context
- * - Stores JWT in SecureStore
+ * - Stores JWT in SecureStore (native) or localStorage (web)
  * - Injects token into Axios via setApiAccessToken
  * - Handles global 401 via Axios interceptor callback
  */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { setApiAccessToken, setUnauthorizedHandler } from '../services/api';
 import { loginApi, registerApi, type BackendUser } from '../services/authApi';
@@ -13,6 +14,30 @@ import { Storage } from '../utils/storage';
 import { useTheme } from './ThemeContext';
 
 const TOKEN_KEY = 'dailydigest_jwt';
+
+// Web-safe token storage helpers
+const tokenStorage = {
+  async get(): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(TOKEN_KEY);
+    }
+    return SecureStore.getItemAsync(TOKEN_KEY);
+  },
+  async set(value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(TOKEN_KEY, value);
+      return;
+    }
+    return SecureStore.setItemAsync(TOKEN_KEY, value);
+  },
+  async remove(): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(TOKEN_KEY);
+      return;
+    }
+    return SecureStore.deleteItemAsync(TOKEN_KEY);
+  },
+};
 
 interface AuthContextType {
   isBootstrapping: boolean;
@@ -42,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setApiAccessToken(null);
     setToken(null);
     setUser(null);
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await tokenStorage.remove();
     await Storage.removeUser();
   };
 
@@ -58,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const savedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+        const savedToken = await tokenStorage.get();
         if (!savedToken) return;
 
         setApiAccessToken(savedToken);
@@ -85,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const res = await loginApi(email, password);
-    await SecureStore.setItemAsync(TOKEN_KEY, res.token);
+    await tokenStorage.set(res.token);
     setApiAccessToken(res.token);
     setToken(res.token);
     await setUserAndPersist(res.user);
@@ -94,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name?: string) => {
     const res = await registerApi({ email, password, name });
-    await SecureStore.setItemAsync(TOKEN_KEY, res.token);
+    await tokenStorage.set(res.token);
     setApiAccessToken(res.token);
     setToken(res.token);
     await setUserAndPersist(res.user);

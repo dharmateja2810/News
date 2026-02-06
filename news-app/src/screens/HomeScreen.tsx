@@ -13,7 +13,6 @@ import {
   SafeAreaView,
   StatusBar,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../utils/hooks';
 import { useNewsStore } from '../store';
 import { NewsService } from '../services/newsService';
@@ -22,7 +21,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { APP_CONFIG, NEWS_CATEGORIES } from '../constants/appConfig';
 
 export const HomeScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
   const theme = useTheme();
   
   const {
@@ -58,7 +56,9 @@ export const HomeScreen: React.FC = () => {
       }
       
       const page = refresh ? 1 : currentPage;
+      console.log('[HomeScreen] Fetching news, page:', page, 'category:', selectedCategory);
       const response = await NewsService.fetchNews(page, selectedCategory);
+      console.log('[HomeScreen] Got articles:', response.items.length, 'First title:', response.items[0]?.title);
       
       if (refresh) {
         setArticles(response.items);
@@ -74,7 +74,7 @@ export const HomeScreen: React.FC = () => {
         setCurrentPage(page + 1);
       }
     } catch (error) {
-      console.error('Error loading news:', error);
+      console.error('[HomeScreen] Error loading news:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,7 +109,7 @@ export const HomeScreen: React.FC = () => {
         </View>
         <TouchableOpacity
           style={[styles.searchButton, { backgroundColor: theme.colors.backgroundSecondary }]}
-          onPress={() => navigation.navigate('Search')}
+          onPress={() => {}}
         >
           <Ionicons name="search" size={20} color={theme.colors.text} />
         </TouchableOpacity>
@@ -139,7 +139,7 @@ export const HomeScreen: React.FC = () => {
           </Text>
           <NewsCard
             article={featuredArticle}
-            onPress={() => navigation.navigate('ArticleDetail', { article: featuredArticle })}
+            onPress={() => {}}
             variant="featured"
           />
         </View>
@@ -177,7 +177,7 @@ export const HomeScreen: React.FC = () => {
         renderItem={({ item }) => (
           <NewsCard
             article={item}
-            onPress={() => navigation.navigate('ArticleDetail', { article: item })}
+            onPress={() => {}}
           />
         )}
         ListHeaderComponent={renderHeader}
