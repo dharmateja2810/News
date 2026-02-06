@@ -6,11 +6,17 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
+import { EmailModule } from '../email/email.module';
+
+// Conditionally import OAuth strategies
+const optionalProviders: any[] = [];
 
 @Module({
   imports: [
     UsersModule,
+    EmailModule,
     PassportModule,
+    ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -22,7 +28,38 @@ import { UsersModule } from '../users/users.module';
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    // Google Strategy - only register if configured
+    {
+      provide: 'GOOGLE_STRATEGY',
+      useFactory: (configService: ConfigService) => {
+        const clientId = configService.get<string>('GOOGLE_CLIENT_ID');
+        if (!clientId) {
+          console.log('[AuthModule] Google OAuth not configured - skipping GoogleStrategy');
+          return null;
+        }
+        const { GoogleStrategy } = require('./strategies/google.strategy');
+        return new GoogleStrategy(configService);
+      },
+      inject: [ConfigService],
+    },
+    // Apple Strategy - only register if configured
+    {
+      provide: 'APPLE_STRATEGY',
+      useFactory: (configService: ConfigService) => {
+        const clientId = configService.get<string>('APPLE_CLIENT_ID');
+        if (!clientId) {
+          console.log('[AuthModule] Apple OAuth not configured - skipping AppleStrategy');
+          return null;
+        }
+        const { AppleStrategy } = require('./strategies/apple.strategy');
+        return new AppleStrategy(configService);
+      },
+      inject: [ConfigService],
+    },
+  ],
   controllers: [AuthController],
 })
 export class AuthModule {}

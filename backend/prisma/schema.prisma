@@ -10,16 +10,27 @@ datasource db {
 }
 
 model User {
-  id           String      @id @default(uuid())
-  email        String      @unique
-  passwordHash String      @map("password_hash")
-  name         String?
-  theme        String      @default("light")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  id              String      @id @default(uuid())
+  email           String      @unique
+  passwordHash    String?     @map("password_hash")
+  name            String?
+  theme           String      @default("light")
   
-  bookmarks    Bookmark[]
-  likes        Like[]
+  // Email verification
+  emailVerified   Boolean     @default(false) @map("email_verified")
+  verifyToken     String?     @map("verify_token")
+  verifyTokenExp  DateTime?   @map("verify_token_exp")
+  
+  // OAuth providers
+  googleId        String?     @unique @map("google_id")
+  appleId         String?     @unique @map("apple_id")
+  avatarUrl       String?     @map("avatar_url")
+  
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  
+  bookmarks       Bookmark[]
+  likes           Like[]
 
   @@map("users")
 }

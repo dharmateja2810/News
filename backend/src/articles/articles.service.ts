@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 
@@ -19,7 +19,7 @@ export class ArticlesService {
   }
 
   private normalizeCategory(input: string | undefined, textForHeuristics: string): string {
-    const allowed = new Set([
+    const allowed = [
       'Technology',
       'Business',
       'Sports',
@@ -28,10 +28,16 @@ export class ArticlesService {
       'Entertainment',
       'Politics',
       'World',
-    ]);
+    ];
+
+    const allowedMap = new Map(allowed.map((name) => [name.toLowerCase(), name]));
 
     const raw = (input || '').trim();
-    if (raw && allowed.has(raw)) return raw;
+    const normalizedRaw = raw.toLowerCase();
+
+    if (normalizedRaw && allowedMap.has(normalizedRaw)) {
+      return allowedMap.get(normalizedRaw) as string;
+    }
 
     // Heuristic fallback (useful for n8n/general feeds that don't tag categories).
     const t = (textForHeuristics || '').toLowerCase();
@@ -71,11 +77,7 @@ export class ArticlesService {
     });
 
     if (existingArticle) {
-      // Update existing article instead of creating duplicate
-      return this.prisma.article.update({
-        where: { url: createArticleDto.url },
-        data,
-      });
+      throw new ConflictException('Article with this URL already exists');
     }
 
     return this.prisma.article.create({
@@ -91,16 +93,18 @@ export class ArticlesService {
   }) {
     const { skip = 0, take = 20, category, search } = params;
 
+    const sanitizedSearch = search ? search.replace(/\u0000/g, '').trim() : undefined;
+
     const where: any = {};
 
     if (category && category !== 'All') {
       where.category = category;
     }
 
-    if (search) {
+    if (sanitizedSearch) {
       where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
+        { title: { contains: sanitizedSearch, mode: 'insensitive' } },
+        { description: { contains: sanitizedSearch, mode: 'insensitive' } },
       ];
     }
 
@@ -122,13 +126,22 @@ export class ArticlesService {
       this.prisma.article.count({ where }),
     ]);
 
+    const page = Math.floor(skip / take) + 1;
+    const totalPages = Math.ceil(total / take);
+
     return {
+      items: articles,
+      total,
+      page,
+      pageSize: take,
+      totalPages,
+      // Backward-compatible response used by the mobile app
       articles,
       pagination: {
         total,
-        page: Math.floor(skip / take) + 1,
+        page,
         pageSize: take,
-        totalPages: Math.ceil(total / take),
+        totalPages,
       },
     };
   }
@@ -162,9 +175,11 @@ export class ArticlesService {
   }
 
   async getCategories() {
-    return this.prisma.category.findMany({
+    const categories = await this.prisma.category.findMany({
       orderBy: { name: 'asc' },
     });
+
+    return categories.map((category) => category.name);
   }
 }
 

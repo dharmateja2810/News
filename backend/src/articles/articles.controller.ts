@@ -18,6 +18,7 @@ import {
 import { ArticlesService } from './articles.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { ConfigService } from '@nestjs/config';
+import { UuidPipe } from '../common/pipes/uuid.pipe';
 
 @ApiTags('articles')
 @Controller('articles')
@@ -37,7 +38,8 @@ export class ArticlesController {
     @Headers('x-webhook-secret') webhookSecret: string,
   ) {
     // Verify webhook secret
-    const expectedSecret = this.configService.get('N8N_WEBHOOK_SECRET');
+    const expectedSecret =
+      this.configService.get('N8N_WEBHOOK_SECRET') || 'dailydigest-n8n-webhook-secret';
     if (webhookSecret !== expectedSecret) {
       throw new UnauthorizedException('Invalid webhook secret');
     }
@@ -61,12 +63,13 @@ export class ArticlesController {
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 20;
     const skip = (pageNum - 1) * limitNum;
+    const sanitizedSearch = search ? search.replace(/\u0000/g, '').trim() : undefined;
 
     return this.articlesService.findAll({
       skip,
       take: limitNum,
       category,
-      search,
+      search: sanitizedSearch,
     });
   }
 
@@ -81,7 +84,7 @@ export class ArticlesController {
   @ApiOperation({ summary: 'Get single article by ID' })
   @ApiResponse({ status: 200, description: 'Article retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Article not found' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', new UuidPipe()) id: string) {
     return this.articlesService.findOne(id);
   }
 }

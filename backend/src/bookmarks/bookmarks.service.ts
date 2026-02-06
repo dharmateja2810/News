@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -6,6 +6,14 @@ export class BookmarksService {
   constructor(private prisma: PrismaService) {}
 
   async toggle(userId: string, articleId: string) {
+    const article = await this.prisma.article.findUnique({
+      where: { id: articleId },
+    });
+
+    if (!article) {
+      throw new NotFoundException('Article not found');
+    }
+
     // Check if bookmark exists
     const existing = await this.prisma.bookmark.findUnique({
       where: {
@@ -53,6 +61,14 @@ export class BookmarksService {
   }
 
   async toggleLike(userId: string, articleId: string) {
+    const article = await this.prisma.article.findUnique({
+      where: { id: articleId },
+    });
+
+    if (!article) {
+      throw new NotFoundException('Article not found');
+    }
+
     // Check if like exists
     const existing = await this.prisma.like.findUnique({
       where: {
