@@ -16,28 +16,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
+import { listArticles, mapArticleToUi } from '../services/articlesApi';
 import { NewsDetailModal } from './NewsDetailModal';
-import { APP_CONFIG } from '../constants/appConfig';
-import { MOCK_ARTICLES } from '../services/mockData';
-import { formatRelativeTime } from '../utils/formatters';
-import type { NewsArticle } from '../types';
-
-function mapMockToUi(a: NewsArticle): UiArticle {
-  return {
-    id: a.id,
-    title: a.title,
-    // Prefer full content so the detail modal has enough text.
-    description: a.content || a.description || '',
-    imageUrl: a.imageUrl,
-    source: a.source,
-    category: a.category,
-    time: formatRelativeTime(a.publishedDate),
-    sourceUrl: a.sourceUrl,
-    publishedAt: a.publishedDate,
-    likeCount: 0,
-    bookmarkCount: 0,
-  };
-}
 
 export const SearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,21 +38,8 @@ export const SearchScreen: React.FC = () => {
       void (async () => {
         setLoading(true);
         try {
-          if (APP_CONFIG.USE_MOCK_DATA) {
-            const qLower = q.toLowerCase();
-            const filtered = MOCK_ARTICLES.filter((a) => {
-              return (
-                a.title.toLowerCase().includes(qLower) ||
-                a.description.toLowerCase().includes(qLower) ||
-                a.source.toLowerCase().includes(qLower) ||
-                a.category.toLowerCase().includes(qLower)
-              );
-            }).slice(0, 20);
-            setResults(filtered.map(mapMockToUi));
-            return;
-          }
-          // Backend mode (future): use API search here.
-          setResults([]);
+          const res = await listArticles({ search: q, limit: 20, page: 1 });
+          setResults(res.articles.map(mapArticleToUi));
         } finally {
           setLoading(false);
         }

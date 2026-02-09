@@ -9,27 +9,8 @@ import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { NewsDetailModal } from './NewsDetailModal';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
-import { APP_CONFIG } from '../constants/appConfig';
-import { MOCK_ARTICLES } from '../services/mockData';
-import { formatRelativeTime } from '../utils/formatters';
-import type { NewsArticle } from '../types';
-
-function mapMockToUi(a: NewsArticle): UiArticle {
-  return {
-    id: a.id,
-    title: a.title,
-    // Prefer full content so the detail modal has enough text.
-    description: a.content || a.description || '',
-    imageUrl: a.imageUrl,
-    source: a.source,
-    category: a.category,
-    time: formatRelativeTime(a.publishedDate),
-    sourceUrl: a.sourceUrl,
-    publishedAt: a.publishedDate,
-    likeCount: 0,
-    bookmarkCount: 0,
-  };
-}
+import { listBookmarks } from '../services/bookmarksApi';
+import { mapArticleToUi } from '../services/articlesApi';
 
 export const BookmarksScreen: React.FC = () => {
   const { savedArticleIds, toggleSave, isLoading: bookmarksLoading } = useSavedArticles();
@@ -43,14 +24,8 @@ export const BookmarksScreen: React.FC = () => {
     void (async () => {
       setLoading(true);
       try {
-        if (APP_CONFIG.USE_MOCK_DATA) {
-          const ids = savedArticleIds;
-          const filtered = MOCK_ARTICLES.filter((a) => ids.has(a.id));
-          setSavedArticles(filtered.map(mapMockToUi));
-          return;
-        }
-        // Backend mode (future): fetch saved articles from API.
-        setSavedArticles([]);
+        const bookmarked = await listBookmarks();
+        setSavedArticles(bookmarked.map(mapArticleToUi));
       } finally {
         setLoading(false);
       }

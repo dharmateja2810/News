@@ -1,6 +1,4 @@
 /**
- * Home Screen - Main news feed
-/**
  * Home Screen - TikTok Style
  * Full-screen vertical scrolling news feed
  */
@@ -17,41 +15,20 @@ import {
   ScrollView,
   ActivityIndicator,
   Share,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
+import { listArticles, mapArticleToUi } from '../services/articlesApi';
 import { APP_CONFIG, NEWS_CATEGORIES } from '../constants/appConfig';
-import { MOCK_ARTICLES } from '../services/mockData';
-import { formatRelativeTime } from '../utils/formatters';
-import type { NewsArticle } from '../types';
 
 const { width, height } = Dimensions.get('window');
 
 const CATEGORIES = [...NEWS_CATEGORIES];
 
-function mapMockToUi(a: NewsArticle): UiArticle {
-  return {
-    id: a.id,
-    title: a.title,
-    // Prefer full content so detail modal + feed have enough body text.
-    description: a.content || a.description || '',
-    imageUrl: a.imageUrl,
-    source: a.source,
-    category: a.category,
-    time: formatRelativeTime(a.publishedDate),
-    sourceUrl: a.sourceUrl,
-    publishedAt: a.publishedDate,
-    likeCount: 0,
-    bookmarkCount: 0,
-  };
-}
-
 export const HomeScreen: React.FC = () => {
-  const insets = useSafeAreaInsets();
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
@@ -72,16 +49,20 @@ export const HomeScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  const loadMock = async () => {
-    setIsLoading(true);
+  const loadFromApi = async (refresh: boolean) => {
+    setIsLoading(!refresh);
+    setIsRefreshing(refresh);
     try {
-      const filtered =
-        selectedCategory === 'All'
-          ? MOCK_ARTICLES
-          : MOCK_ARTICLES.filter((a) => a.category === selectedCategory);
-      setArticles(filtered.map(mapMockToUi));
-      setPage(1);
-      setHasMore(false);
+      const nextPage = refresh ? 1 : page;
+      const res = await listArticles({
+        page: nextPage,
+        limit: APP_CONFIG.NEWS_PER_PAGE,
+        category: selectedCategory === 'All' ? undefined : selectedCategory,
+      });
+      const mapped = res.articles.map(mapArticleToUi);
+      setArticles(prev => (refresh ? mapped : [...prev, ...mapped]));
+      setPage(nextPage + 1);
+      setHasMore(res.pagination.page < res.pagination.totalPages);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -91,22 +72,12 @@ export const HomeScreen: React.FC = () => {
   useEffect(() => {
     setCurrentIndex(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    if (APP_CONFIG.USE_MOCK_DATA) {
-      void loadMock();
-      return;
-    }
-    // Backend mode (future): keep existing paging behavior when re-enabled.
-    void loadMock();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadFromApi(true);
   }, [selectedCategory]);
 
   const onRefresh = async () => {
     setIsRefreshing(true);
-    if (APP_CONFIG.USE_MOCK_DATA) {
-      await loadMock();
-      return;
-    }
-    await loadMock();
+    await loadFromApi(true);
   };
 
   const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
@@ -321,8 +292,9 @@ export const HomeScreen: React.FC = () => {
               index,
             })}
             onEndReached={() => {
-              // Backend mode (future): paging can be re-enabled here.
-              if (!isLoading && hasMore) return;
+              if (!isLoading && hasMore) {
+                void loadFromApi(false);
+              }
             }}
             onEndReachedThreshold={0.5}
             refreshing={isRefreshing}
@@ -458,9 +430,6 @@ const styles = StyleSheet.create({
   },
   retryText: {
     fontWeight: '700',
-  },
-});
-    marginBottom: 16,
   },
 });
 
