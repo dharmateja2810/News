@@ -1,256 +1,355 @@
 # DailyDigest - Cross-Platform News Application
 
-A comprehensive news aggregation system with mobile applications for iOS and Android, built with modern technologies and designed for scalability.
+A comprehensive news aggregation system with mobile applications for iOS/Android/Web, a NestJS backend API, and automated news scraping with AI summarization.
 
 ## 🏗 Project Structure
 
 ```
-NewsApplication/
-├── news-app/              # Mobile application (Expo/React Native)
-│   └── [See news-app/README.md for details]
-├── news-app-api/         # Backend API (Node.js/Express) [To be implemented]
-├── docker-compose.yml    # Docker orchestration [To be implemented]
-└── README.md             # This file
+News/
+├── backend/               # NestJS API (Node.js/TypeScript)
+├── news-app/              # Mobile & Web app (Expo/React Native)
+├── automation/            # News scrapers & n8n workflows
+│   ├── scraper/           # Python web scraper with Ollama AI
+│   └── n8n/               # n8n automation workflows
+├── README.md              # This file
+├── plan.md                # Development plan & architecture
+├── QUICKSTART.md          # Quick start guide
+└── PUBLISH_GUIDE.md       # App store publishing guide
 ```
 
-## 📱 Mobile App (Frontend)
+## 🚀 Quick Start
 
-The mobile application is built with React Native and Expo, featuring:
+### Prerequisites
+- Node.js 20+
+- PostgreSQL (via Docker or local)
+- Ollama (for AI summarization, optional)
 
-- ✅ Modern, news-focused UI design
-- ✅ Cross-platform support (iOS & Android)
-- ✅ User authentication (with mock backend)
-- ✅ News feed with categories and search
-- ✅ Bookmarks and offline support
-- ✅ Light/Dark mode
-- ✅ Smooth animations and interactions
+### 1. Start the Database
+```bash
+cd backend
+docker compose up -d
+```
 
-**Status**: ✅ **READY FOR DEMO**
+### 2. Start the Backend
+```bash
+cd backend
+npm install
+npx prisma migrate dev
+npm run start:dev
+```
 
-[View Mobile App Documentation](./news-app/README.md)
-
-### Quick Start (Mobile App)
-
+### 3. Start the Mobile/Web App
 ```bash
 cd news-app
 npm install
-npm start
+npm run web    # For web browser
+npm start      # For mobile (Expo Go)
 ```
 
-Then press `i` for iOS simulator or `a` for Android emulator, or scan QR code with Expo Go app.
+---
 
-## 🚀 Current Development Status
+## 📁 Complete File Reference
 
-### ✅ Phase 1: Frontend Development (COMPLETED)
-- [x] Project structure and setup
-- [x] Theme system with light/dark mode
-- [x] Navigation system (authentication + main app)
-- [x] Authentication screens (Splash, Login, Signup)
-- [x] Main app screens (Home, Categories, Search, Bookmarks, Profile)
-- [x] Reusable UI components
-- [x] Mock data service with 40+ realistic articles
-- [x] State management with Zustand
-- [x] TypeScript integration
-- [x] Documentation
+### Root Directory
 
-### 🚧 Phase 2: Backend Development (NEXT)
-- [ ] Set up Docker infrastructure
-- [ ] PostgreSQL database setup
-- [ ] Redis cache setup
-- [ ] Express.js API with TypeScript
-- [ ] JWT authentication
-- [ ] Rate limiting middleware
-- [ ] News API endpoints
-- [ ] Supabase integration
+| File | Description |
+|------|-------------|
+| `README.md` | Main project documentation (this file) |
+| `plan.md` | Architecture plan with system diagrams and technology stack |
+| `QUICKSTART.md` | Quick start guide for running the frontend app |
+| `PUBLISH_GUIDE.md` | Guide for publishing to Expo, Play Store, and App Store |
 
-### 🚧 Phase 3: Data Pipeline (FUTURE)
-- [ ] n8n setup in Docker
-- [ ] NewsAPI.org integration
-- [ ] Data transformation workflows
-- [ ] Duplicate detection
-- [ ] Scheduled execution
+---
 
-### 🚧 Phase 4: Production Deployment (FUTURE)
-- [ ] AWS RDS setup
-- [ ] AWS ElastiCache setup
-- [ ] AWS Lambda deployment
-- [ ] Supabase Cloud migration
-- [ ] CI/CD pipeline
+### Backend (`/backend`)
 
-## 🎨 App Features
+#### Configuration Files
 
-### Authentication
-- Email/password signup and login
-- OAuth integration ready (Google, GitHub)
-- Secure token storage
-- Automatic session management
+| File | Description |
+|------|-------------|
+| `package.json` | Node.js dependencies: NestJS, Prisma, JWT, bcrypt, AWS SES |
+| `tsconfig.json` | TypeScript config with ES2021 target and strict mode |
+| `nest-cli.json` | NestJS CLI configuration for source root and compiler |
+| `config.env` | Environment variables: database, JWT, OAuth, AWS SES settings |
+| `docker-compose.yml` | Docker setup for PostgreSQL database and pgAdmin UI |
+| `README.md` | Backend API documentation with endpoints and setup |
+| `ARCHITECTURE.md` | System architecture diagrams and data flow |
+| `QUICKSTART.md` | Quick setup guide for backend development |
+| `SETUP_INSTRUCTIONS.md` | Detailed step-by-step setup instructions |
 
-### News Reading
-- Browse latest news from multiple sources
-- Filter by 8 categories (Technology, Business, Sports, etc.)
-- Search articles by keywords
-- Pull-to-refresh for latest updates
-- Infinite scroll pagination
+#### Prisma (`/backend/prisma`)
 
-### Personalization
-- Bookmark favorite articles
-- Dark mode support
-- Persistent settings
-- Offline article caching
+| File | Description |
+|------|-------------|
+| `schema.prisma` | Database schema: User, Article, Bookmark, Like models with OAuth fields |
+| `seed.ts` | Seeder that creates categories, test user, and sample articles |
+| `migrations/` | SQL migrations for database schema changes |
 
-### User Experience
-- Smooth animations and transitions
-- Modern, clean interface
-- Responsive design
-- Fast performance with caching
+#### Source (`/backend/src`)
 
-## 🛠 Technology Stack
+| File | Description |
+|------|-------------|
+| `main.ts` | App entry point: CORS, validation pipes, Swagger docs setup |
+| `app.module.ts` | Root module importing Auth, Users, Articles, Bookmarks, Prisma modules |
 
-### Frontend
-- **Framework**: React Native with Expo SDK
-- **Language**: TypeScript
-- **Navigation**: React Navigation v6
-- **State Management**: Zustand
-- **UI**: Custom components with modern design
-- **Animations**: React Native Reanimated
-- **Storage**: AsyncStorage
+#### Auth Module (`/backend/src/auth`)
 
-### Backend (To be implemented)
-- **Runtime**: Node.js v20 LTS
-- **Framework**: Express.js
-- **Language**: TypeScript
-- **Database**: PostgreSQL v15.5+
-- **Cache**: Redis v7.2+
-- **Auth**: Supabase
-- **Data Pipeline**: n8n v1.36+
+| File | Description |
+|------|-------------|
+| `auth.controller.ts` | Endpoints: register, login, verify-email, Google/Apple OAuth |
+| `auth.service.ts` | Auth logic: password hashing, JWT tokens, OAuth handling |
+| `auth.module.ts` | Auth module with JWT and Passport integration |
+| `jwt.strategy.ts` | Passport strategy for validating Bearer tokens |
+| `jwt-auth.guard.ts` | Guard for protecting routes with JWT authentication |
+| `dto/register.dto.ts` | DTO for registration: email, password, name validation |
+| `dto/login.dto.ts` | DTO for login: email and password validation |
+| `strategies/google.strategy.ts` | Passport Google OAuth strategy (optional) |
+| `strategies/apple.strategy.ts` | Passport Apple OAuth strategy (optional) |
 
-### DevOps
-- **Containerization**: Docker & Docker Compose
-- **Cloud**: AWS (RDS, ElastiCache, Lambda)
-- **Version Control**: Git
+#### Articles Module (`/backend/src/articles`)
 
-## 📋 System Architecture
+| File | Description |
+|------|-------------|
+| `articles.controller.ts` | REST endpoints: CRUD, pagination, search, webhook for scrapers |
+| `articles.service.ts` | Business logic: category normalization, duplicate detection |
+| `articles.module.ts` | NestJS module for articles feature |
+| `dto/create-article.dto.ts` | DTO for article creation with validation decorators |
 
+#### Bookmarks Module (`/backend/src/bookmarks`)
+
+| File | Description |
+|------|-------------|
+| `bookmarks.controller.ts` | Endpoints for bookmark/like toggle operations (JWT protected) |
+| `bookmarks.service.ts` | Logic for toggling saves/likes, fetching user's saved articles |
+| `bookmarks.module.ts` | NestJS module for bookmarks feature |
+
+#### Users Module (`/backend/src/users`)
+
+| File | Description |
+|------|-------------|
+| `users.controller.ts` | Endpoints for profile retrieval and theme preference updates |
+| `users.service.ts` | User CRUD operations and OAuth account linking |
+| `users.module.ts` | NestJS module for users feature |
+
+#### Email Module (`/backend/src/email`)
+
+| File | Description |
+|------|-------------|
+| `email.service.ts` | AWS SES integration for verification/welcome emails with HTML templates |
+| `email.module.ts` | NestJS module for email service |
+
+#### Prisma Module (`/backend/src/prisma`)
+
+| File | Description |
+|------|-------------|
+| `prisma.service.ts` | Prisma client wrapper with connection lifecycle management |
+| `prisma.module.ts` | Global module exporting Prisma service to all modules |
+
+#### Health Module (`/backend/src/health`)
+
+| File | Description |
+|------|-------------|
+| `health.controller.ts` | Health check endpoints for `/api` root and `/api/health` |
+
+#### Test Suite (`/backend/test`)
+
+| File | Description |
+|------|-------------|
+| `README.md` | Test suite documentation with running instructions |
+| `jest-e2e.json` | Jest configuration for end-to-end tests |
+| `setup.ts` | Global test setup and configuration |
+| `test-utils.ts` | Shared utilities: test app creation, fixtures, database cleanup |
+| `auth.e2e-spec.ts` | Authentication tests: registration, login, JWT, email verification |
+| `articles.e2e-spec.ts` | Articles tests: CRUD, pagination, filtering, search, webhook |
+| `bookmarks.e2e-spec.ts` | Bookmarks tests: save/unsave, like/unlike, listing |
+| `users.e2e-spec.ts` | Users tests: profile retrieval, theme preferences |
+| `health.e2e-spec.ts` | Health check tests: API status, database connectivity |
+| `rate-limiting.e2e-spec.ts` | Rate limiting tests: request throttling, brute force protection |
+| `security.e2e-spec.ts` | Security tests: SQL injection, XSS, input validation, authorization |
+
+---
+
+### Mobile App (`/news-app`)
+
+#### Configuration Files
+
+| File | Description |
+|------|-------------|
+| `package.json` | Dependencies: Expo 54, React Navigation, Zustand, OAuth packages |
+| `App.tsx` | Root component wrapping app with providers and navigation |
+| `index.ts` | Expo app registration entry point |
+| `app.json` | Expo config: app name, icons, splash screen, EAS build settings |
+| `tsconfig.json` | TypeScript config extending Expo's base with strict mode |
+| `babel.config.js` | Babel configuration using babel-preset-expo |
+| `metro.config.js` | Metro bundler configuration |
+| `eas.json` | EAS Build config for development, preview, and production |
+| `README.md` | Mobile app documentation with features and setup |
+| `BUILD_APK.txt` | Instructions for building Android APK using EAS |
+| `PUBLISH_NOW.md` | Quick guide for publishing the app |
+
+#### Components (`/news-app/src/components`)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Barrel export for all reusable UI components |
+| `NewsCard.tsx` | Article card with default/featured/compact variants; bookmark toggle |
+| `CategoryChip.tsx` | Tappable category filter chip with selected/unselected states |
+| `LoadingSpinner.tsx` | Activity indicator with optional message and fullscreen mode |
+| `EmptyState.tsx` | Empty state placeholder with icon, title, and message |
+| `TabBar.tsx` | Custom bottom tab bar with Home, Search, Saved, Profile tabs |
+
+#### Screens (`/news-app/src/screens`)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Barrel export for all screen components |
+| `HomeScreen.tsx` | Main news feed with category filters, pull-to-refresh, infinite scroll |
+| `LoginScreen.tsx` | Login form with email/password and Google/Apple OAuth buttons |
+| `SignupScreen.tsx` | Registration form with OAuth options and password confirmation |
+
+#### Navigation (`/news-app/src/navigation`)
+
+| File | Description |
+|------|-------------|
+| `AppNavigator.tsx` | Root navigation: auth flow (Login/Signup) vs authenticated (Home) |
+| `types.ts` | TypeScript definitions for navigation stacks and screen props |
+
+#### Services (`/news-app/src/services`)
+
+| File | Description |
+|------|-------------|
+| `api.ts` | Axios client with JWT injection, 401 handling, platform-aware base URL |
+| `newsService.ts` | News fetching with pagination, category filtering, backend mapping |
+| `articlesApi.ts` | Articles API functions with TypeScript interfaces |
+| `authApi.ts` | Auth API: login, register, Google/Apple OAuth token exchange |
+| `bookmarksApi.ts` | Bookmarks API: toggle saves/likes, list saved articles |
+| `usersApi.ts` | Users API: fetch profile, update theme preference |
+
+#### State Management (`/news-app/src/store`)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Zustand stores for auth, news, bookmarks, and theme state |
+
+#### Contexts (`/news-app/src/contexts`)
+
+| File | Description |
+|------|-------------|
+| `AuthContext.tsx` | Auth context: JWT storage, Google/Apple OAuth, session management |
+| `ThemeContext.tsx` | Theme context: light/dark mode toggle with persistent storage |
+| `SavedArticlesContext.tsx` | Bookmarks context with optimistic updates and backend sync |
+
+#### Types (`/news-app/src/types`)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | TypeScript interfaces: NewsArticle, User, AuthState, NewsState, API responses |
+
+#### Constants (`/news-app/src/constants`)
+
+| File | Description |
+|------|-------------|
+| `appConfig.ts` | App config: API URLs (platform-aware), rate limits, pagination, OAuth |
+
+#### Theme (`/news-app/src/theme`)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Theme entry point combining colors, typography, spacing into themes |
+| `colors.ts` | Color palettes for light/dark modes with semantic and category colors |
+| `typography.ts` | Typography system: font sizes, weights, line heights, text presets |
+| `spacing.ts` | Spacing system: consistent margins, paddings, border radii, shadows |
+
+#### Utilities (`/news-app/src/utils`)
+
+| File | Description |
+|------|-------------|
+| `dateUtils.ts` | Date formatting: relative time ("2 hours ago"), truncation |
+| `hooks.ts` | Custom hooks: `useTheme`, `useDebounce` for search |
+| `storage.ts` | AsyncStorage wrapper for persisting tokens, user, bookmarks, theme |
+
+---
+
+### Automation (`/automation`)
+
+#### Python Scraper (`/automation/scraper`)
+
+| File | Description |
+|------|-------------|
+| `scrape_afr.py` | Web scraper for AFR news with Ollama LLM summarization |
+| `requirements.txt` | Python dependencies: requests, beautifulsoup4, python-dotenv |
+
+#### n8n Workflows (`/automation/n8n`)
+
+| File | Description |
+|------|-------------|
+| `README.md` | n8n automation setup guide and workflow import instructions |
+| `docker-compose.yml` | Docker Compose config for running n8n with backend webhook |
+| `start.ps1` | PowerShell script to run n8n locally via npx |
+| `workflows/afr-homepage-to-backend.json` | n8n workflow: scrape AFR, summarize with Gemini, post to backend |
+
+---
+
+## 🎯 Key Features
+
+### Backend API
+- ✅ JWT authentication with email/password
+- ✅ Google & Apple OAuth (configurable)
+- ✅ Email verification via AWS SES
+- ✅ Articles CRUD with pagination and search
+- ✅ Bookmarks and likes system
+- ✅ PostgreSQL database with Prisma ORM
+
+### Mobile/Web App
+- ✅ Cross-platform (iOS, Android, Web)
+- ✅ 8 news categories with filtering
+- ✅ Pull-to-refresh and infinite scroll
+- ✅ Light/dark mode theming
+- ✅ Offline-capable with local storage
+
+### News Automation
+- ✅ Python scraper for AFR (Australian Financial Review)
+- ✅ AI-powered article summarization via Ollama
+- ✅ Webhook integration with backend
+- ✅ n8n workflow support
+
+---
+
+## 📊 Summary Statistics
+
+| Component | Files |
+|-----------|-------|
+| Backend | ~26 files |
+| Mobile App | ~29 files |
+| Automation | ~5 files |
+| Documentation | ~4 files |
+| **Total** | **~64 files** |
+
+---
+
+## 🔧 Environment Variables
+
+### Backend (`backend/config.env`)
+```env
+DATABASE_URL="postgresql://user:pass@localhost:5432/dailydigest"
+JWT_SECRET="your-jwt-secret"
+GOOGLE_CLIENT_ID=""          # Optional: Google OAuth
+APPLE_CLIENT_ID=""           # Optional: Apple OAuth
+AWS_ACCESS_KEY_ID=""         # Optional: AWS SES for emails
 ```
-┌─────────────────┐
-│   Mobile App    │ (React Native/Expo)
-│  (iOS/Android)  │
-└────────┬────────┘
-         │
-         │ HTTPS/REST
-         │
-┌────────▼────────┐
-│   Backend API   │ (Node.js/Express)
-│  Authentication │ - JWT Tokens
-│  Rate Limiting  │ - 100 req/hour
-│  Caching        │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-┌───▼───┐ ┌──▼────┐
-│ Redis │ │ Postgres│
-│ Cache │ │   DB    │
-└───────┘ └──┬────┘
-             │
-        ┌────▼─────┐
-        │   n8n    │ (Data Pipeline)
-        │ Workflows│ - Fetch news
-        └──────────┘ - Transform data
+
+### Mobile App
+```env
+EXPO_PUBLIC_API_URL="http://localhost:3001/api"
 ```
 
-## 🎯 Key Design Decisions
-
-### Easy Rebranding
-The app is designed to be easily rebranded by changing a few configuration files:
-- `src/constants/appConfig.ts` - App name, tagline, API endpoints
-- `app.json` - Expo configuration
-- `src/theme/colors.ts` - Color scheme
-
-### Mock Data for Development
-- 40+ realistic news articles across all categories
-- Simulates API delays for realistic testing
-- Easy to swap with real API calls
-
-### Scalable Architecture
-- Separation of concerns (UI, business logic, data)
-- TypeScript for type safety
-- Modular component structure
-- Ready for backend integration
-
-## 📱 Demo Instructions
-
-### Running the Mobile App
-
-1. **Install dependencies**:
-   ```bash
-   cd news-app
-   npm install
-   ```
-
-2. **Start the development server**:
-   ```bash
-   npm start
-   ```
-
-3. **Run on device**:
-   - **iOS**: Press `i` (Mac only) or use Expo Go app
-   - **Android**: Press `a` or use Expo Go app
-   - **Web**: Press `w`
-
-4. **Test the app**:
-   - Login with any email/password (mock authentication)
-   - Browse news articles
-   - Try different categories
-   - Search for articles
-   - Bookmark articles
-   - Toggle dark mode in Profile
-   - View article details
-
-## 🔄 Next Steps
-
-1. **Backend Development**: Implement the Express.js API with PostgreSQL and Redis
-2. **Docker Setup**: Create docker-compose.yml for local development
-3. **n8n Pipeline**: Configure news fetching workflows
-4. **API Integration**: Connect mobile app to real backend
-5. **Testing**: Add unit tests and integration tests
-6. **Deployment**: Set up AWS infrastructure and deploy
-
-## 📚 Documentation
-
-- [Mobile App README](./news-app/README.md) - Detailed frontend documentation
-- [Backend API README](./news-app-api/README.md) - To be created
-- [Docker Setup Guide](./DOCKER.md) - To be created
-- [Deployment Guide](./DEPLOYMENT.md) - To be created
-
-## 🐛 Known Issues & Limitations
-
-- Mock authentication (any email/password works)
-- Mock data (not fetching from real news APIs yet)
-- OAuth not fully implemented (requires backend)
-- No push notifications yet
-- No analytics tracking yet
-
-## 🤝 Contributing
-
-This is a demonstration project. For production use:
-1. Replace mock authentication with real backend
-2. Implement proper error handling and validation
-3. Add comprehensive testing
-4. Set up proper security measures
-5. Implement analytics and monitoring
+---
 
 ## 📄 License
 
 MIT License - Free to use for personal and commercial projects
 
-## 📧 Contact
-
-For questions or feedback:
-- Email: support@dailydigest.com
-- GitHub: [Repository URL]
-
 ---
 
-**Built with ❤️ for the news lover in all of us**
+**Built with ❤️ using NestJS, React Native, Expo, and Prisma**
 

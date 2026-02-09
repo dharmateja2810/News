@@ -2,6 +2,7 @@ import os
 import re
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin
 from typing import List, Dict, Optional
 
@@ -12,6 +13,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 AFR_HOME = "https://www.afr.com/"
+AFR_SECTIONS = os.getenv(
+    "AFR_SECTIONS",
+    "https://www.afr.com/companies,https://www.afr.com/markets,https://www.afr.com/policy",
+)
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120 Safari/537.36"
@@ -24,8 +29,20 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 
 REQUEST_TIMEOUT = 30
 OLLAMA_TIMEOUT = 120  # Longer timeout for local LLM
-MAX_ARTICLES = int(os.getenv("MAX_ARTICLES", "12"))
+MAX_ARTICLES = int(os.getenv("MAX_ARTICLES", "30"))
 SUMMARY_SENTENCES = os.getenv("SUMMARY_SENTENCES", "3-5")
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "6"))
+ALLOWED_CATEGORIES = [
+    "Technology",
+    "Business",
+    "Sports",
+    "Health",
+    "Science",
+    "Entertainment",
+    "Politics",
+    "World",
+]
+
 
 
 session = requests.Session()
@@ -195,6 +212,56 @@ def summarize_with_ollama(title: str, content: str) -> str:
         return ""
 
 
+def classify_category_with_ollama(title: str, description: str, content: str) -> str:
+    prompt = (
+        "You are a news classifier. "
+        "Choose exactly one category from this list: "
+        f"{', '.join(ALLOWED_CATEGORIES)}. "
+        "Return only the category name, nothing else.\n\n"
+        f"TITLE: {title}\n\nDESCRIPTION: {description}\n\nCONTENT: {content}"
+    )
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 24,
+        },
+    }
+
+    try:
+        res = session.post(OLLAMA_URL, json=payload, timeout=OLLAMA_TIMEOUT)
+        res.raise_for_status()
+        data = res.json()
+        response = (data.get("response", "") or "").strip()
+        for category in ALLOWED_CATEGORIES:
+            if response.lower() == category.lower():
+                return category
+    except Exception as e:
+        print(f"Ollama classification failed: {e}")
+
+    # Fallback heuristics if LLM fails
+    text = f"{title} {description} {content}".lower()
+    if re.search(r"\b(ai|chip|apple|google|microsoft|cyber|software|startup|tech)\b", text):
+        return "Technology"
+    if re.search(r"\b(stock|market|asx|profit|earnings|rates|bank|economy|inflation)\b", text):
+        return "Business"
+    if re.search(r"\b(match|league|tournament|championship|soccer|football|cricket|tennis)\b", text):
+        return "Sports"
+    if re.search(r"\b(health|hospital|cancer|vaccine|disease|medical)\b", text):
+        return "Health"
+    if re.search(r"\b(science|research|space|telescope|climate|biology|physics)\b", text):
+        return "Science"
+    if re.search(r"\b(movie|music|streaming|celebrity|entertainment)\b", text):
+        return "Entertainment"
+    if re.search(r"\b(election|government|parliament|policy|minister|politics)\b", text):
+        return "Politics"
+
+    return "Business"
+
+
 def parse_article(url: str) -> Dict[str, str]:
     html = fetch(url)
     soup = BeautifulSoup(html, "html.parser")
@@ -220,6 +287,8 @@ def parse_article(url: str) -> Dict[str, str]:
 
     summary = summarize_with_ollama(title, content or description)
 
+    category = classify_category_with_ollama(title, description, content or summary)
+
     if not description:
         description = summary or content or title
 
@@ -229,7 +298,7 @@ def parse_article(url: str) -> Dict[str, str]:
         "content": summary or content or description,
         "imageUrl": image_url,
         "source": "AFR",
-        "category": "Business",
+        "category": category,
         "author": author,
         "publishedAt": published_at,
         "url": url,
@@ -250,33 +319,45 @@ def post_to_backend(article: Dict[str, str]) -> Optional[Dict]:
 
 
 def main() -> None:
-    homepage = fetch(AFR_HOME)
-    links = extract_links(homepage)
+    urls = [AFR_HOME] + [u.strip() for u in AFR_SECTIONS.split(",") if u.strip()]
+
+    all_links: List[str] = []
+    for src in urls:
+        try:
+            page = fetch(src)
+            all_links.extend(extract_links(page))
+        except Exception as exc:
+            print(f"Skip source {src}: {exc}")
+
+    # Deduplicate and cap
+    links = list(dict.fromkeys(all_links))[:MAX_ARTICLES]
 
     if not links:
         print("No article links found.")
         return
 
-    results = []
-    for url in links:
+    def process_url(url: str) -> Optional[Dict[str, str]]:
         try:
             article = parse_article(url)
-            results.append(article)
             print(f"Parsed: {article['title']}")
-            time.sleep(0.5)
-        except Exception as exc:
-            print(f"Skip {url}: {exc}")
-
-    print(f"Parsed {len(results)} articles.")
-
-    for article in results:
-        try:
             response = post_to_backend(article)
             print(f"Upserted: {article['title']}")
             if response:
                 print(json.dumps(response, indent=2)[:500])
+            return article
         except Exception as exc:
-            print(f"Upsert failed: {article['url']} -> {exc}")
+            print(f"Skip {url}: {exc}")
+            return None
+
+    results: List[Dict[str, str]] = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_url, url) for url in links]
+        for future in as_completed(futures):
+            item = future.result()
+            if item:
+                results.append(item)
+
+    print(f"Parsed {len(results)} articles.")
 
 
 if __name__ == "__main__":

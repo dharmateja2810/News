@@ -103,5 +103,7 @@ export const darkColors = {
   politics: '#ef4444',
 } as const;
 
-export type ColorScheme = typeof lightColors;
-
+// Use a looser type that allows different string values for different themes
+export type ColorScheme = {
+  [K in keyof typeof lightColors]: string;
+};
