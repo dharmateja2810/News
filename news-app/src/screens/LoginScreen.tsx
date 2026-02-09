@@ -1,45 +1,42 @@
 /**
  * Login Screen - Email/Password + Google/Apple OAuth
  */
+/**
+ * Login Screen
+ */
 
 import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Alert,
-  Platform,
+  StyleSheet,
   KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as WebBrowser from 'expo-web-browser';
+import { useNavigation } from '@react-navigation/native';
+import { LoginScreenNavigationProp } from '../navigation/types';
 import { useTheme } from '../utils/hooks';
-import { useAuth } from '../contexts/AuthContext';
-import { APP_CONFIG } from '../constants/appConfig';
+import { useAuthStore } from '../store';
+import { Ionicons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
+import { loginApi } from '../services/authApi';
+import { setApiAccessToken } from '../services/api';
 
-// Ensure browser sessions complete properly
-WebBrowser.maybeCompleteAuthSession();
+const TOKEN_KEY = 'dailydigest_jwt';
 
-interface Props {
-  navigation: any;
-}
-
-export const LoginScreen: React.FC<Props> = ({ navigation }) => {
+export const LoginScreen: React.FC = () => {
+  const navigation = useNavigation<LoginScreenNavigationProp>();
   const theme = useTheme();
-  const { login, loginWithGoogle, loginWithApple } = useAuth();
+  const login = useAuthStore(state => state.login);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -47,303 +44,227 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    setIsLoading(true);
+    setLoading(true);
+
     try {
-      await login(email, password);
-    } catch (error: any) {
-      Alert.alert('Login Failed', error.response?.data?.message || 'Invalid credentials');
+      const res = await loginApi(email.trim(), password);
+
+      await SecureStore.setItemAsync(TOKEN_KEY, res.token);
+      setApiAccessToken(res.token);
+
+      const userForStore = {
+        id: res.user.id,
+        email: res.user.email,
+        name: res.user.name || undefined,
+        createdAt: new Date().toISOString(),
+      };
+
+      const tokensForStore = {
+        accessToken: res.token,
+        refreshToken: '',
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      };
+
+      login(userForStore as any, tokensForStore as any);
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.message ||
+        'Login failed. Please check your credentials.';
+      Alert.alert('Error', String(msg));
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    if (!loginWithGoogle) {
-      Alert.alert('Not Available', 'Google Sign-In is not configured');
-      return;
-    }
-    setIsGoogleLoading(true);
-    try {
-      await loginWithGoogle();
-    } catch (error: any) {
-      console.error('[LoginScreen] Google sign-in error:', error);
-      Alert.alert('Error', error.message || 'Google sign-in failed');
-    } finally {
-      setIsGoogleLoading(false);
-    }
+  const handleOAuthLogin = (provider: 'google' | 'github') => {
+    Alert.alert('OAuth Login', `${provider} login will be implemented with backend integration`);
   };
-
-  const handleAppleSignIn = async () => {
-    if (!loginWithApple) {
-      Alert.alert('Not Available', 'Apple Sign-In is not configured');
-      return;
-    }
-    setIsAppleLoading(true);
-    try {
-      await loginWithApple();
-    } catch (error: any) {
-      console.error('[LoginScreen] Apple sign-in error:', error);
-      if (error.code !== 'ERR_CANCELED') {
-        Alert.alert('Error', error.message || 'Apple sign-in failed');
-      }
-    } finally {
-      setIsAppleLoading(false);
-    }
-  };
-
-  const styles = createStyles(theme);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Welcome Back
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-              Sign in to {APP_CONFIG.APP_NAME}
-            </Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Ionicons name="newspaper" size={60} color={theme.colors.accent} />
+          <Text style={[styles.title, { color: theme.colors.text }]}>Welcome Back</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Sign in to continue reading</Text>
+        </View>
+
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
           </View>
 
-          {/* OAuth Buttons */}
-          <View style={styles.oauthSection}>
-            {/* Google Sign In */}
-            <TouchableOpacity
-              style={[styles.oauthButton, { backgroundColor: theme.colors.backgroundSecondary }]}
-              onPress={handleGoogleSignIn}
-              disabled={isGoogleLoading}
-            >
-              <Ionicons name="logo-google" size={20} color="#DB4437" />
-              <Text style={[styles.oauthButtonText, { color: theme.colors.text }]}>
-                {isGoogleLoading ? 'Signing in...' : 'Continue with Google'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Apple Sign In - iOS only */}
-            {Platform.OS === 'ios' && (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                buttonStyle={
-                  theme.isDark
-                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                }
-                cornerRadius={12}
-                style={styles.appleButton}
-                onPress={handleAppleSignIn}
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Password"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Ionicons
+                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                size={20}
+                color={theme.colors.textSecondary}
               />
-            )}
-
-            {/* Apple Sign In - Web/Android fallback */}
-            {Platform.OS !== 'ios' && (
-              <TouchableOpacity
-                style={[styles.oauthButton, { backgroundColor: theme.isDark ? '#fff' : '#000' }]}
-                onPress={handleAppleSignIn}
-                disabled={isAppleLoading}
-              >
-                <Ionicons name="logo-apple" size={20} color={theme.isDark ? '#000' : '#fff'} />
-                <Text style={[styles.oauthButtonText, { color: theme.isDark ? '#000' : '#fff' }]}>
-                  {isAppleLoading ? 'Signing in...' : 'Continue with Apple'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-            <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>or</Text>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-          </View>
-
-          {/* Email/Password Form */}
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color={theme.colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.forgotPassword}>
-              <Text style={[styles.forgotPasswordText, { color: theme.colors.accent }]}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: theme.colors.accent }]}
-              onPress={handleLogin}
-              disabled={isLoading}
-            >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'Signing in...' : 'Sign In'}
-              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Sign Up Link */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: theme.colors.textSecondary }]}>
-              Don't have an account?{' '}
+          <TouchableOpacity
+            style={[styles.loginButton, { backgroundColor: theme.colors.accent }]}
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={[styles.loginButtonText, { color: theme.colors.textInverse }]}> 
+              {loading ? 'Signing In...' : 'Sign In'}
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-              <Text style={[styles.signupLink, { color: theme.colors.accent }]}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </TouchableOpacity>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider}>
+          <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+          <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>or continue with</Text>
+          <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+        </View>
+
+        {/* OAuth Buttons */}
+        <View style={styles.oauthContainer}>
+          <TouchableOpacity
+            style={[styles.oauthButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+            onPress={() => handleOAuthLogin('google')}
+          >
+            <Ionicons name="logo-google" size={24} color="#DB4437" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.oauthButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
+            onPress={() => handleOAuthLogin('github')}
+          >
+            <Ionicons name="logo-github" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Sign Up Link */}
+        <View style={styles.signupContainer}>
+          <Text style={[styles.signupText, { color: theme.colors.textSecondary }]}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+            <Text style={[styles.signupLink, { color: theme.colors.accent }]}>Sign Up</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
-const createStyles = (theme: any) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    keyboardView: {
-      flex: 1,
-    },
-    scrollContent: {
-      flexGrow: 1,
-      padding: 24,
-      justifyContent: 'center',
-    },
-    header: {
-      marginBottom: 32,
-    },
-    title: {
-      fontSize: 32,
-      fontWeight: 'bold',
-      marginBottom: 8,
-    },
-    subtitle: {
-      fontSize: 16,
-    },
-    oauthSection: {
-      gap: 12,
-    },
-    oauthButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 14,
-      borderRadius: 12,
-      gap: 10,
-    },
-    oauthButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    appleButton: {
-      height: 50,
-      width: '100%',
-    },
-    divider: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 24,
-    },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-    },
-    dividerText: {
-      marginHorizontal: 16,
-      fontSize: 14,
-    },
-    form: {
-      gap: 16,
-    },
-    inputContainer: {
-      gap: 8,
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: '500',
-    },
-    inputWrapper: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      borderRadius: 12,
-      height: 52,
-      gap: 12,
-    },
-    input: {
-      flex: 1,
-      fontSize: 16,
-    },
-    forgotPassword: {
-      alignSelf: 'flex-end',
-    },
-    forgotPasswordText: {
-      fontSize: 14,
-      fontWeight: '500',
-    },
-    loginButton: {
-      padding: 16,
-      borderRadius: 12,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    loginButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    footer: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      marginTop: 32,
-    },
-    footerText: {
-      fontSize: 14,
-    },
-    signupLink: {
-      fontSize: 14,
-      fontWeight: '600',
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    justifyContent: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+  },
+  form: {
+    marginBottom: 24,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 16,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  loginButton: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+  },
+  oauthContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 24,
+  },
+  oauthButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  signupContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signupText: {
+    fontSize: 14,
+  },
+  signupLink: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
     },
   });

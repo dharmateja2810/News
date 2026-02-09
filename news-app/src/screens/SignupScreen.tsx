@@ -29,23 +29,43 @@ WebBrowser.maybeCompleteAuthSession();
 interface Props {
   navigation: any;
 }
+/**
+ * Signup Screen
+ */
 
-export const SignupScreen: React.FC<Props> = ({ navigation }) => {
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { SignupScreenNavigationProp } from '../navigation/types';
+import { useTheme } from '../utils/hooks';
+import { useAuthStore } from '../store';
+import { Ionicons } from '@expo/vector-icons';
+
+export const SignupScreen: React.FC = () => {
+  const navigation = useNavigation<SignupScreenNavigationProp>();
   const theme = useTheme();
-  const { register, loginWithGoogle, loginWithApple } = useAuth();
+  const login = useAuthStore(state => state.login);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isAppleLoading, setIsAppleLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!name || !email || !password || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -54,225 +74,204 @@ export const SignupScreen: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
-    setIsLoading(true);
-    try {
-      await register(email, password, name || undefined);
-      Alert.alert(
-        'Verification Email Sent',
-        'Please check your email to verify your account before logging in.',
-        [{ text: 'OK' }]
-      );
-    } catch (error: any) {
-      Alert.alert('Signup Failed', error.response?.data?.message || 'Could not create account');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    setLoading(true);
 
-  const handleGoogleSignIn = async () => {
-    if (!loginWithGoogle) {
-      Alert.alert('Not Available', 'Google Sign-In is not configured');
-      return;
-    }
-    setIsGoogleLoading(true);
-    try {
-      await loginWithGoogle();
-    } catch (error: any) {
-      console.error('[SignupScreen] Google sign-in error:', error);
-      Alert.alert('Error', error.message || 'Google sign-in failed');
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
+    setTimeout(() => {
+      const mockUser = {
+        id: '1',
+        email,
+        name,
+        createdAt: new Date().toISOString(),
+      };
 
-  const handleAppleSignIn = async () => {
-    if (!loginWithApple) {
-      Alert.alert('Not Available', 'Apple Sign-In is not configured');
-      return;
-    }
-    setIsAppleLoading(true);
-    try {
-      await loginWithApple();
-    } catch (error: any) {
-      console.error('[SignupScreen] Apple sign-in error:', error);
-      if (error.code !== 'ERR_CANCELED') {
-        Alert.alert('Error', error.message || 'Apple sign-in failed');
-      }
-    } finally {
-      setIsAppleLoading(false);
-    }
-  };
+      const mockTokens = {
+        accessToken: 'mock_access_token',
+        refreshToken: 'mock_refresh_token',
+        expiresAt: Date.now() + 3600000,
+      };
 
-  const styles = createStyles(theme);
+      login(mockUser as any, mockTokens as any);
+      setLoading(false);
+    }, 1000);
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Back Button */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
         >
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+        </TouchableOpacity>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Create Account
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-              Join {APP_CONFIG.APP_NAME} today
-            </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Create Account</Text>
+          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Sign up to get started</Text>
+        </View>
+
+        {/* Form */}
+        <View style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Full Name"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+            />
           </View>
 
-          {/* OAuth Buttons */}
-          <View style={styles.oauthSection}>
-            {/* Google Sign In */}
-            <TouchableOpacity
-              style={[styles.oauthButton, { backgroundColor: theme.colors.backgroundSecondary }]}
-              onPress={handleGoogleSignIn}
-              disabled={isGoogleLoading}
-            >
-              <Ionicons name="logo-google" size={20} color="#DB4437" />
-              <Text style={[styles.oauthButtonText, { color: theme.colors.text }]}>
-                {isGoogleLoading ? 'Signing up...' : 'Continue with Google'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+          </View>
 
-            {/* Apple Sign In - iOS only */}
-            {Platform.OS === 'ios' && (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP}
-                buttonStyle={
-                  theme.isDark
-                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                }
-                cornerRadius={12}
-                style={styles.appleButton}
-                onPress={handleAppleSignIn}
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Password"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Ionicons
+                name={showPassword ? 'eye-outline' : 'eye-off-outline'}
+                size={20}
+                color={theme.colors.textSecondary}
               />
-            )}
-
-            {/* Apple Sign In - Web/Android fallback */}
-            {Platform.OS !== 'ios' && (
-              <TouchableOpacity
-                style={[styles.oauthButton, { backgroundColor: theme.isDark ? '#fff' : '#000' }]}
-                onPress={handleAppleSignIn}
-                disabled={isAppleLoading}
-              >
-                <Ionicons name="logo-apple" size={20} color={theme.isDark ? '#000' : '#fff'} />
-                <Text style={[styles.oauthButtonText, { color: theme.isDark ? '#000' : '#fff' }]}>
-                  {isAppleLoading ? 'Signing up...' : 'Continue with Apple'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-            <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>or</Text>
-            <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-          </View>
-
-          {/* Email/Password Form */}
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                Name <Text style={{ color: theme.colors.textSecondary }}>(optional)</Text>
-              </Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="person-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Enter your name"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email *</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password *</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Create a password"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color={theme.colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Confirm Password *</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: theme.colors.backgroundSecondary }]}>
-                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={[styles.input, { color: theme.colors.text }]}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  secureTextEntry={!showPassword}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.signupButton, { backgroundColor: theme.colors.accent }]}
-              onPress={handleSignup}
-              disabled={isLoading}
-            >
-              <Text style={styles.signupButtonText}>
-                {isLoading ? 'Creating Account...' : 'Create Account'}
-              </Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="lock-closed-outline" size={20} color={theme.colors.textSecondary} />
+            <TextInput
+              style={[styles.input, { color: theme.colors.text }]}
+              placeholder="Confirm Password"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.signupButton, { backgroundColor: theme.colors.accent }]}
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            <Text style={[styles.signupButtonText, { color: theme.colors.textInverse }]}> 
+              {loading ? 'Creating Account...' : 'Sign Up'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Login Link */}
+        <View style={styles.loginContainer}>
+          <Text style={[styles.loginText, { color: theme.colors.textSecondary }]}>Already have an account? </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+            <Text style={[styles.loginLink, { color: theme.colors.accent }]}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 24,
+    paddingTop: 60,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 60,
+    left: 24,
+    zIndex: 10,
+  },
+  header: {
+    marginBottom: 40,
+    marginTop: 40,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+  },
+  form: {
+    marginBottom: 24,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 16,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
+  },
+  signupButton: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  signupButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  loginText: {
+    fontSize: 14,
+  },
+  loginLink: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
 
           {/* Terms */}
           <Text style={[styles.terms, { color: theme.colors.textSecondary }]}>
