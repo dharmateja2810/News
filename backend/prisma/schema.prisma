@@ -1,5 +1,3 @@
-// Prisma Schema for DailyDigest
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,45 +8,38 @@ datasource db {
 }
 
 model User {
-  id              String      @id @default(uuid())
-  email           String      @unique
-  passwordHash    String?     @map("password_hash")
-  name            String?
-  theme           String      @default("light")
-  
-  // Email verification
-  emailVerified   Boolean     @default(false) @map("email_verified")
-  verifyToken     String?     @map("verify_token")
-  verifyTokenExp  DateTime?   @map("verify_token_exp")
-  
-  // OAuth providers
-  googleId        String?     @unique @map("google_id")
-  appleId         String?     @unique @map("apple_id")
-  avatarUrl       String?     @map("avatar_url")
-  
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-  
-  bookmarks       Bookmark[]
-  likes           Like[]
+  id             String     @id @default(uuid())
+  email          String     @unique
+  passwordHash   String     @map("password_hash")
+  name           String?
+  theme          String     @default("light")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  emailVerified  Boolean?   @default(false) @map("email_verified")
+  verifyToken    String?    @map("verify_token") @db.VarChar(255)
+  verifyTokenExp DateTime?  @map("verify_token_exp") @db.Timestamp(6)
+  googleId       String?    @unique @map("google_id") @db.VarChar(255)
+  appleId        String?    @unique @map("apple_id") @db.VarChar(255)
+  avatarUrl      String?    @map("avatar_url")
+  bookmarks      Bookmark[]
+  likes          Like[]
 
   @@map("users")
 }
 
 model Article {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   title       String
-  description String?   @db.Text
-  content     String?   @db.Text
-  imageUrl    String?   @map("image_url")
+  description String?
+  content     String?
+  imageUrl    String?    @map("image_url")
   source      String
   category    String
   author      String?
-  publishedAt DateTime? @map("published_at")
-  url         String    @unique
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
+  publishedAt DateTime?  @map("published_at")
+  url         String     @unique
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
   bookmarks   Bookmark[]
   likes       Like[]
 
@@ -62,9 +53,8 @@ model Bookmark {
   userId    String   @map("user_id")
   articleId String   @map("article_id")
   createdAt DateTime @default(now()) @map("created_at")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, articleId])
   @@map("bookmarks")
@@ -75,9 +65,8 @@ model Like {
   userId    String   @map("user_id")
   articleId String   @map("article_id")
   createdAt DateTime @default(now()) @map("created_at")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, articleId])
   @@map("likes")
@@ -92,3 +81,14 @@ model Category {
   @@map("categories")
 }
 
+/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// model digests {
+// }
+
+/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// model ingested_items {
+// }
+
+/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// model subscriptions {
+// }
