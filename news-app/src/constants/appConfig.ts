@@ -11,21 +11,11 @@ const getApiBaseUrl = () => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
   if (!__DEV__) {
-    return 'https://api.dailydigest.com';
+    return 'https://news-mrqu.onrender.com/api';
   }
-  // Development mode - pick the right URL for each platform
-  // NOTE: For other machines, set EXPO_PUBLIC_API_URL environment variable
-  // or update the IP addresses below to your backend server's IP
-  if (Platform.OS === 'web') {
-    return 'http://localhost:3000/api';
-  }
-  if (Platform.OS === 'android') {
-    // Android emulator uses 10.0.2.2 to reach host machine
-    return 'http://10.0.2.2:3000/api';
-  }
-  // iOS simulator / real device - use your backend machine's LAN IP
-  // Find it with: ipconfig (Windows) or ifconfig (Mac/Linux)
-  return 'http://192.168.1.18:3000/api';
+  // Development mode - use deployed backend for all platforms
+  // This allows the app to work on any machine without running local backend
+  return 'https://news-mrqu.onrender.com/api';
 };
 
 export const APP_CONFIG = {
