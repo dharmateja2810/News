@@ -5,8 +5,8 @@ services:
     plan: free
     region: singapore  # Close to ap-south-1 Supabase
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: node dist/main.js
+    buildCommand: npm run render-build
+    startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
         value: production
