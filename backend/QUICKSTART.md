@@ -101,7 +101,7 @@ docker-compose restart postgres
 **Port 3000 already in use?**
 ```bash
 # Change PORT in .env file
-PORT=3001
+PORT=3000
 ```
 
 **Prisma errors?**

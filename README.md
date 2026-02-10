@@ -340,7 +340,7 @@ AWS_ACCESS_KEY_ID=""         # Optional: AWS SES for emails
 
 ### Mobile App
 ```env
-EXPO_PUBLIC_API_URL="http://localhost:3001/api"
+EXPO_PUBLIC_API_URL="http://localhost:3000/api"
 ```
 
 ---

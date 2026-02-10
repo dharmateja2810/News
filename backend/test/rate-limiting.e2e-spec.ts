@@ -47,13 +47,11 @@ describe('Rate Limiting (e2e)', () => {
   describe('General Rate Limiting', () => {
     it('should allow requests under the rate limit', async () => {
       // Make 10 requests (should be under any reasonable limit)
-      const requests = Array(10).fill(null).map(() =>
-        request(app.getHttpServer())
+      for (let i = 0; i < 10; i += 1) {
+        await request(app.getHttpServer())
           .get('/api/articles')
-          .expect(200)
-      );
-
-      await Promise.all(requests);
+          .expect(200);
+      }
     });
 
     // Note: This test is commented out because rate limiting may not be enabled yet
@@ -140,13 +138,12 @@ describe('Rate Limiting (e2e)', () => {
   describe('Per-User Rate Limiting', () => {
     it('should track rate limits per user', async () => {
       // First user makes requests
-      const user1Requests = Array(5).fill(null).map(() =>
-        request(app.getHttpServer())
+      for (let i = 0; i < 5; i += 1) {
+        await request(app.getHttpServer())
           .get('/api/bookmarks')
           .set('Authorization', `Bearer ${authToken}`)
-          .expect(200)
-      );
-      await Promise.all(user1Requests);
+          .expect(200);
+      }
 
       // Second user should have their own limit
       const secondUser = await createTestUser(prisma, {

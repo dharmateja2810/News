@@ -122,7 +122,7 @@ export const SearchScreen: React.FC = () => {
         <FlatList
           data={results}
           renderItem={renderSearchResult}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={styles.resultsList}
         />
       )}

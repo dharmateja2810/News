@@ -15,14 +15,14 @@ const getApiBaseUrl = () => {
   }
   // Development mode - pick the right URL for each platform
   if (Platform.OS === 'web') {
-    return 'http://localhost:3001/api';
+    return 'http://localhost:3000/api';
   }
   if (Platform.OS === 'android') {
     // Android emulator uses 10.0.2.2 to reach host machine
-    return 'http://10.0.2.2:3001/api';
+    return 'http://10.0.2.2:3000/api';
   }
   // iOS simulator / real device - use LAN IP
-  return 'http://192.168.1.18:3001/api';
+  return 'http://192.168.1.18:3000/api';
 };
 
 export const APP_CONFIG = {

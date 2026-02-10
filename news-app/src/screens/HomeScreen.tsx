@@ -278,7 +278,7 @@ export const HomeScreen: React.FC = () => {
             ref={listRef}
             data={articles}
             renderItem={renderNewsItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
             pagingEnabled
             showsVerticalScrollIndicator={false}
             snapToInterval={pageHeight}

@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
+import { useAuth } from '../contexts/AuthContext';
 import { NewsDetailModal } from './NewsDetailModal';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
@@ -14,6 +15,7 @@ import { mapArticleToUi } from '../services/articlesApi';
 
 export const BookmarksScreen: React.FC = () => {
   const { savedArticleIds, toggleSave, isLoading: bookmarksLoading } = useSavedArticles();
+  const { token } = useAuth();
   const [savedArticles, setSavedArticles] = useState<UiArticle[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<UiArticle | null>(null);
@@ -21,16 +23,28 @@ export const BookmarksScreen: React.FC = () => {
   const { colors } = useTheme();
 
   useEffect(() => {
+    if (!token) {
+      setSavedArticles([]);
+      setLoading(false);
+      return;
+    }
     void (async () => {
       setLoading(true);
       try {
         const bookmarked = await listBookmarks();
-        setSavedArticles(bookmarked.map(mapArticleToUi));
+        const mapped = bookmarked.map(mapArticleToUi);
+        const uniqueById = Array.from(
+          new Map(mapped.map((article) => [article.id, article])).values(),
+        );
+        setSavedArticles(uniqueById);
+      } catch (error) {
+        console.error('Error loading saved articles:', error);
+        setSavedArticles([]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [savedArticleIds]);
+  }, [savedArticleIds, token]);
 
   const handleArticlePress = (article: UiArticle) => {
     setSelectedArticle(article);
@@ -70,7 +84,15 @@ export const BookmarksScreen: React.FC = () => {
         <Text style={[styles.headerCount, { color: colors.textSecondary }]}> {savedArticles.length} saved</Text>
       </View>
 
-      {loading || bookmarksLoading ? (
+      {!token ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="lock-closed-outline" size={64} color={colors.border} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>Sign in to view bookmarks</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}> 
+            Your saved articles will appear here after you sign in
+          </Text>
+        </View>
+      ) : loading || bookmarksLoading ? (
         <View style={styles.emptyState}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 12 }]}> 
@@ -89,7 +111,7 @@ export const BookmarksScreen: React.FC = () => {
         <FlatList
           data={savedArticles}
           renderItem={renderSavedArticle}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={styles.listContent}
         />
       )}

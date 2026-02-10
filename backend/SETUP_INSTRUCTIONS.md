@@ -221,7 +221,7 @@ docker-compose logs postgres
 
 Edit `.env` file:
 ```env
-PORT=3001
+PORT=3000
 ```
 
 Then restart the server.

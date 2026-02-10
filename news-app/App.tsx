@@ -21,7 +21,7 @@ function AppContent() {
   const { isDark, colors } = useTheme();
   const { token, isBootstrapping } = useAuth();
 
-  const DISABLE_AUTH_FOR_NOW = true;
+  const DISABLE_AUTH_FOR_NOW = false;
 
   const renderScreen = () => {
     switch (activeTab) {
