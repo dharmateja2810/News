@@ -14,6 +14,8 @@ const getApiBaseUrl = () => {
     return 'https://api.dailydigest.com';
   }
   // Development mode - pick the right URL for each platform
+  // NOTE: For other machines, set EXPO_PUBLIC_API_URL environment variable
+  // or update the IP addresses below to your backend server's IP
   if (Platform.OS === 'web') {
     return 'http://localhost:3000/api';
   }
@@ -21,7 +23,8 @@ const getApiBaseUrl = () => {
     // Android emulator uses 10.0.2.2 to reach host machine
     return 'http://10.0.2.2:3000/api';
   }
-  // iOS simulator / real device - use LAN IP
+  // iOS simulator / real device - use your backend machine's LAN IP
+  // Find it with: ipconfig (Windows) or ifconfig (Mac/Linux)
   return 'http://192.168.1.18:3000/api';
 };
 
