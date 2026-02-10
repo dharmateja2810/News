@@ -16,12 +16,17 @@ async function bootstrap() {
   // For local dev, we reflect the request origin (origin: true). If you want to lock
   // this down, set `CORS_ORIGIN` to a comma-separated allowlist.
   const corsOriginEnv = process.env.CORS_ORIGIN;
-  const origin = corsOriginEnv
-    ? corsOriginEnv
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : true;
+  let origin: boolean | string | string[];
+  if (corsOriginEnv === '*') {
+    origin = true; // Reflect request origin (allows all)
+  } else if (corsOriginEnv) {
+    origin = corsOriginEnv
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } else {
+    origin = true;
+  }
 
   app.enableCors({
     origin,

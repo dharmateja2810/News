@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: dailydigest-backend
+    runtime: node
+    plan: free
+    region: singapore  # Close to ap-south-1 Supabase
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: node dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: N8N_WEBHOOK_SECRET
+        sync: false  # Set manually in Render dashboard
+    healthCheckPath: /health
