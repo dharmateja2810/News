@@ -32,7 +32,11 @@ export const SavedArticlesProvider: React.FC<{ children: React.ReactNode }> = ({
       const articles = await listBookmarks();
       setSavedArticleIds(new Set(articles.map((a) => a.id)));
     } catch (error) {
-      console.error('Error loading bookmarks:', error);
+      // Silently handle - user may not be logged in or network issue
+      // Only log in dev mode
+      if (__DEV__) {
+        console.log('Bookmarks not loaded (user may not be logged in)');
+      }
     } finally {
       setIsLoading(false);
     }

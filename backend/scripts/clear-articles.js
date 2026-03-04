@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   await prisma.article.deleteMany({});
-  console.log('✅ Deleted all articles');
+  console.log('Deleted all articles');
 }
 
 main()

@@ -2,16 +2,42 @@
  * Profile Screen - Simple Version
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { updateTheme } from '../services/usersApi';
 
 export const ProfileScreen: React.FC = () => {
   const { isDark, toggleTheme, colors } = useTheme();
   const { user, logout, setUser } = useAuth();
+  const { settings, updateSettings, enableNotifications, disableNotifications, testNotification, isLoading } = useNotifications();
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+
+  const handleNotificationToggle = async () => {
+    setNotificationLoading(true);
+    try {
+      if (!settings.enabled) {
+        const success = await enableNotifications();
+        if (!success) {
+          Alert.alert(
+            'Permission Required',
+            'Please enable notifications in your device settings to receive updates.',
+            [{ text: 'OK' }]
+          );
+        }
+      } else {
+        await disableNotifications();
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}> 
@@ -61,12 +87,69 @@ export const ProfileScreen: React.FC = () => {
             />
           </View>
 
-          <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface }]}>
+          <TouchableOpacity 
+            style={[styles.menuItem, { backgroundColor: colors.surface }]}
+            onPress={() => setShowNotificationSettings(!showNotificationSettings)}
+          >
             <View style={styles.menuItemLeft}>
               <Ionicons name="notifications-outline" size={24} color={colors.text} style={styles.menuIcon} />
               <Text style={[styles.menuText, { color: colors.text }]}>Notifications</Text>
             </View>
+            <View style={styles.menuItemRight}>
+              {notificationLoading ? (
+                <ActivityIndicator size="small" color={colors.accent} />
+              ) : (
+                <Switch
+                  value={settings.enabled}
+                  onValueChange={handleNotificationToggle}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                  thumbColor="#fff"
+                />
+              )}
+            </View>
           </TouchableOpacity>
+
+          {/* Notification Sub-settings */}
+          {showNotificationSettings && settings.enabled && (
+            <View style={styles.subSettings}>
+              <View style={[styles.subMenuItem, { backgroundColor: colors.surface }]}>
+                <View style={styles.menuItemLeft}>
+                  <Ionicons name="flash-outline" size={20} color={colors.textSecondary} style={styles.subMenuIcon} />
+                  <Text style={[styles.subMenuText, { color: colors.text }]}>Breaking News</Text>
+                </View>
+                <Switch
+                  value={settings.breakingNews}
+                  onValueChange={(value) => updateSettings({ breakingNews: value })}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <View style={[styles.subMenuItem, { backgroundColor: colors.surface }]}>
+                <View style={styles.menuItemLeft}>
+                  <Ionicons name="newspaper-outline" size={20} color={colors.textSecondary} style={styles.subMenuIcon} />
+                  <Text style={[styles.subMenuText, { color: colors.text }]}>Daily Digest</Text>
+                </View>
+                <Switch
+                  value={settings.dailyDigest}
+                  onValueChange={(value) => updateSettings({ dailyDigest: value })}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.subMenuItem, { backgroundColor: colors.surface }]}
+                onPress={testNotification}
+              >
+                <View style={styles.menuItemLeft}>
+                  <Ionicons name="send-outline" size={20} color={colors.textSecondary} style={styles.subMenuIcon} />
+                  <Text style={[styles.subMenuText, { color: colors.text }]}>Send Test Notification</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <TouchableOpacity style={[styles.menuItem, { backgroundColor: colors.surface }]}>
             <View style={styles.menuItemLeft}>
@@ -150,12 +233,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  menuItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   menuIcon: {
     marginRight: 16,
   },
   menuText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  subSettings: {
+    marginLeft: 20,
+    marginBottom: 8,
+  },
+  subMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  subMenuIcon: {
+    marginRight: 12,
+  },
+  subMenuText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   logoutItem: {
     marginTop: 16,

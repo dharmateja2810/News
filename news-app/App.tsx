@@ -14,6 +14,7 @@ import { TabBar } from './src/components/TabBar';
 import { SavedArticlesProvider } from './src/contexts/SavedArticlesContext';
 import { ThemeProvider, useTheme } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { NotificationProvider } from './src/contexts/NotificationContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 
 function AppContent() {
@@ -64,9 +65,11 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <SavedArticlesProvider>
-            <AppContent />
-          </SavedArticlesProvider>
+          <NotificationProvider>
+            <SavedArticlesProvider>
+              <AppContent />
+            </SavedArticlesProvider>
+          </NotificationProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

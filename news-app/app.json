@@ -2,6 +2,7 @@
   "expo": {
     "name": "DailyDigest",
     "slug": "daily-digest",
+    "scheme": "dailydigest",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -24,12 +25,26 @@
       "versionCode": 1,
       "permissions": [
         "INTERNET",
-        "INTERNET"
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "SCHEDULE_EXACT_ALARM"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3b82f6",
+          "sounds": [],
+          "defaultChannel": "default"
+        }
+      ]
+    ],
     "extra": {
       "appName": "DailyDigest",
       "eas": {

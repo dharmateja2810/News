@@ -138,83 +138,85 @@ export const HomeScreen: React.FC = () => {
 
         {/* Bottom Half - Content */}
         <View style={[styles.contentContainer, { backgroundColor: colors.background, height: contentHeight }]}>
-          {/* Title */}
+          {/* Title - full width */}
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={titleLines}>
             {item.title}
           </Text>
 
-          {/* Description */}
-          {(() => {
-            const full = (item.description || '').trim();
-            // Cap by word count so we don't show "..."/ellipsis and we keep layout stable.
-            const MAX_WORDS = 140;
-            const words = full.split(/\s+/).filter(Boolean);
-            const preview = words.slice(0, MAX_WORDS).join(' ');
-            return (
-              <View style={styles.descriptionContainer}>
-                <Text
-                  style={[styles.description, { color: colors.textSecondary }]}
-                  numberOfLines={16}
-                  ellipsizeMode="clip"
-                >
-                  {preview}
-                </Text>
+          {/* Description + Actions row */}
+          <View style={styles.descriptionActionsRow}>
+            {/* Description side */}
+            {(() => {
+              const full = (item.description || '').trim();
+              const MAX_WORDS = 140;
+              const words = full.split(/\s+/).filter(Boolean);
+              const preview = words.slice(0, MAX_WORDS).join(' ');
+              return (
+                <View style={styles.descriptionContainer}>
+                  <Text
+                    style={[styles.description, { color: colors.textSecondary }]}
+                    numberOfLines={16}
+                    ellipsizeMode="clip"
+                  >
+                    {preview}
+                  </Text>
 
-                {/* Meta Info (right after text, not stuck at bottom) */}
-                <View style={styles.meta}>
-                  <Text style={[styles.source, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {item.source}
-                  </Text>
-                  <Text style={[styles.dot, { color: colors.border }]}>•</Text>
-                  <Text style={[styles.time, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {item.time || ' '}
-                  </Text>
+                  {/* Meta Info */}
+                  <View style={styles.meta}>
+                    <Text style={[styles.source, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {item.source}
+                    </Text>
+                    <Text style={[styles.dot, { color: colors.border }]}>•</Text>
+                    <Text style={[styles.time, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {item.time || ' '}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            );
-          })()}
+              );
+            })()}
 
-          {/* Right-side vertical actions (start aligned with title) */}
-          <View style={styles.rightActions}>
-            {/* Like */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => void handleLike(item.id)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isLiked ? 'heart' : 'heart-outline'}
-                size={24}
-                color={isLiked ? '#ff4444' : colors.text}
-              />
-              <Text style={[styles.actionCount, { color: colors.text }]}>
-                {isLiked ? likeCount + 1 : likeCount}
-              </Text>
-            </TouchableOpacity>
+            {/* Right-side vertical actions */}
+            <View style={styles.rightActions}>
+              {/* Like */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => void handleLike(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isLiked ? 'heart' : 'heart-outline'}
+                  size={24}
+                  color={isLiked ? '#ff4444' : colors.text}
+                />
+                <Text style={[styles.actionCount, { color: colors.text }]}>
+                  {isLiked ? likeCount + 1 : likeCount}
+                </Text>
+              </TouchableOpacity>
 
-            {/* Save */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => void handleSave(item.id)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={articleIsSaved ? 'bookmark' : 'bookmark-outline'}
-                size={24}
-                color={articleIsSaved ? '#0f4c75' : colors.text}
-              />
-              <Text style={[styles.actionCount, { color: colors.text }]}>Save</Text>
-            </TouchableOpacity>
+              {/* Save */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => void handleSave(item.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={articleIsSaved ? 'bookmark' : 'bookmark-outline'}
+                  size={24}
+                  color={articleIsSaved ? '#0f4c75' : colors.text}
+                />
+                <Text style={[styles.actionCount, { color: colors.text }]}>Save</Text>
+              </TouchableOpacity>
 
-            {/* Share */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => void Share.share({ message: item.sourceUrl })}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="share-outline" size={24} color={colors.text} />
-              <Text style={[styles.actionCount, { color: colors.text }]}>Share</Text>
-            </TouchableOpacity>
+              {/* Share */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => void Share.share({ message: item.sourceUrl })}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="share-outline" size={24} color={colors.text} />
+                <Text style={[styles.actionCount, { color: colors.text }]}>Share</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -361,7 +363,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: 20,
-    paddingRight: 80,
     paddingBottom: 28,
     overflow: 'hidden',
   },
@@ -371,13 +372,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 26,
   },
+  descriptionActionsRow: {
+    flexDirection: 'row',
+  },
   description: {
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 8,
+    textAlign: 'justify',
   },
   descriptionContainer: {
-    // Don't use flex:1 here, otherwise the meta row gets pushed to the bottom.
+    flex: 1,
   },
   meta: {
     flexDirection: 'row',
@@ -396,10 +401,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   rightActions: {
-    position: 'absolute',
-    right: 12,
-    top: 20,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingLeft: 12,
+    paddingTop: 4,
     gap: 14,
   },
   actionButton: {

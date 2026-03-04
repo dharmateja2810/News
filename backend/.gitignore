@@ -45,3 +45,4 @@ lerna-debug.log*
 # Prisma
 prisma/migrations
 
+config.env

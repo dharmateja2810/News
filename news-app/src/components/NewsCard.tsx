@@ -126,39 +126,40 @@ export const NewsCard: React.FC<NewsCardProps> = ({
         style={styles.image}
         resizeMode="cover"
       />
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={[styles.categoryPill, { backgroundColor: theme.colors.backgroundTertiary }]}>
-            <Text style={[styles.category, { color: theme.colors.accent }]}>
-              {article.category}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={handleBookmark}>
-            <Ionicons
-              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={20}
-              color={theme.colors.accent}
-            />
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={2}>
+      <View style={styles.titleWrapper}>
+        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={3}>
           {article.title}
         </Text>
-        
-        <Text style={[styles.description, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-          {article.description}
-        </Text>
-        
-        <View style={styles.footer}>
-          <View style={styles.meta}>
-            <Text style={[styles.source, { color: theme.colors.textSecondary }]}>
-              {article.source}
+      </View>
+      <View style={styles.content}>
+        <View style={styles.bottomRow}>
+          <View style={styles.descriptionSide}>
+            <View style={[styles.categoryPill, { backgroundColor: theme.colors.backgroundTertiary }]}>
+              <Text style={[styles.category, { color: theme.colors.accent }]}>
+                {article.category}
+              </Text>
+            </View>
+            <Text style={[styles.description, { color: theme.colors.textSecondary }]} numberOfLines={3}>
+              {article.description}
             </Text>
-            <Text style={[styles.dot, { color: theme.colors.textTertiary }]}>•</Text>
-            <Text style={[styles.time, { color: theme.colors.textSecondary }]}>
-              {formatRelativeTime(article.publishedDate)}
-            </Text>
+            <View style={styles.meta}>
+              <Text style={[styles.source, { color: theme.colors.textSecondary }]}>
+                {article.source}
+              </Text>
+              <Text style={[styles.dot, { color: theme.colors.textTertiary }]}>•</Text>
+              <Text style={[styles.time, { color: theme.colors.textSecondary }]}>
+                {formatRelativeTime(article.publishedDate)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.iconColumn}>
+            <TouchableOpacity onPress={handleBookmark} style={styles.iconBtn}>
+              <Ionicons
+                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={theme.colors.accent}
+              />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -179,38 +180,50 @@ const styles = StyleSheet.create({
     height: 200,
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
-  header: {
+  titleWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  bottomRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+  },
+  descriptionSide: {
+    flex: 1,
+    marginRight: 12,
+  },
+  iconColumn: {
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+    gap: 14,
+  },
+  iconBtn: {
+    padding: 4,
   },
   categoryPill: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
   category: {
     fontSize: 12,
     fontWeight: '600',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    lineHeight: 22,
-  },
   description: {
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 12,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 8,
   },
   meta: {
     flexDirection: 'row',

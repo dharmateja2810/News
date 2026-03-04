@@ -6,22 +6,25 @@
  * - Supports Google/Apple OAuth
  */
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import { setApiAccessToken, setUnauthorizedHandler } from '../services/api';
 import {
   loginApi,
   registerApi,
-  googleAuthApi,
   appleAuthApi,
   type BackendUser,
 } from '../services/authApi';
 import { getMe } from '../services/usersApi';
 import { Storage } from '../utils/storage';
 import { useTheme } from './ThemeContext';
+import { APP_CONFIG } from '../constants/appConfig';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = 'dailydigest_jwt';
 
@@ -139,16 +142,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginWithGoogle = async () => {
-    // For web, use browser-based OAuth redirect
     if (Platform.OS === 'web') {
-      // TODO: Implement web Google OAuth
-      throw new Error('Google Sign-In not implemented for web yet');
+      throw new Error('Google Sign-In is not supported on web yet');
     }
 
-    // For native, we'll use expo-auth-session with Google
-    // Note: In production, you'd configure Google Sign-In properly
-    // For now, show not configured message
-    throw new Error('Google Sign-In requires configuration. Set up GOOGLE_CLIENT_ID in your app.');
+    const scheme =
+      Constants.expoConfig?.scheme ||
+      (Constants as any)?.manifest?.scheme ||
+      'dailydigest';
+    const redirectUri = AuthSession.makeRedirectUri({ scheme });
+    const authUrl = `${APP_CONFIG.API_BASE_URL}/auth/google`;
+
+    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+    if (result.type !== 'success' || !result.url) {
+      throw new Error('Google Sign-In cancelled');
+    }
+
+    const parsed = AuthSession.parse(result.url);
+    const token = parsed?.queryParams?.token;
+    const userParam = parsed?.queryParams?.user;
+    if (!token || !userParam) {
+      throw new Error('Google Sign-In failed: missing auth response');
+    }
+
+    let user: BackendUser;
+    try {
+      const raw = typeof userParam === 'string' ? userParam : String(userParam);
+      user = JSON.parse(raw) as BackendUser;
+    } catch {
+      const raw = typeof userParam === 'string' ? decodeURIComponent(userParam) : String(userParam);
+      user = JSON.parse(raw) as BackendUser;
+    }
+
+    await tokenStorage.set(token as string);
+    setApiAccessToken(token as string);
+    setToken(token as string);
+    await setUserAndPersist(user);
+    setThemeMode(user.theme);
   };
 
   const loginWithApple = async () => {

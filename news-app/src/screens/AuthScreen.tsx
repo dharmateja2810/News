@@ -13,12 +13,13 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 
 export const AuthScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
-  const { login, register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -44,6 +45,18 @@ export const AuthScreen: React.FC = () => {
         e?.response?.data?.message ||
         e?.message ||
         'Authentication failed. Please try again.';
+      Alert.alert('Error', String(msg));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (e: any) {
+      const msg = e?.message || 'Google Sign-In failed.';
       Alert.alert('Error', String(msg));
     } finally {
       setLoading(false);
@@ -114,6 +127,16 @@ export const AuthScreen: React.FC = () => {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.oauthButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={onGoogle}
+          disabled={loading}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="logo-google" size={20} color="#DB4437" />
+          <Text style={[styles.oauthText, { color: colors.text }]}>Continue with Google</Text>
+        </TouchableOpacity>
+
         <View style={styles.switchRow}>
           <Text style={[styles.switchText, { color: colors.textSecondary }]}
           >
@@ -174,6 +197,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 16,
+  },
+  oauthButton: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  oauthText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   switchRow: {
     flexDirection: 'row',

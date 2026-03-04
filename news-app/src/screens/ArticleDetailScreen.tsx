@@ -242,11 +242,13 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginBottom: 20,
     fontWeight: '500',
+    textAlign: 'justify',
   },
   body: {
     fontSize: 16,
     lineHeight: 26,
     marginBottom: 32,
+    textAlign: 'justify',
   },
   sourceButton: {
     flexDirection: 'row',

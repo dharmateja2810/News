@@ -22,7 +22,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/120 Safari/537.36"
 )
 
-BACKEND_URL = os.getenv("DAILYDIGEST_BACKEND_ARTICLES_URL", "http://localhost:3001/api/articles")
+BACKEND_URL = os.getenv("DAILYDIGEST_BACKEND_ARTICLES_URL", "https://news-mrqu.onrender.com/api/articles")
 WEBHOOK_SECRET = os.getenv("DAILYDIGEST_WEBHOOK_SECRET") or os.getenv("N8N_WEBHOOK_SECRET", "")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
@@ -30,7 +30,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 REQUEST_TIMEOUT = 30
 OLLAMA_TIMEOUT = 120  # Longer timeout for local LLM
 MAX_ARTICLES = int(os.getenv("MAX_ARTICLES", "30"))
-SUMMARY_SENTENCES = os.getenv("SUMMARY_SENTENCES", "3-5")
+SUMMARY_SENTENCES = os.getenv("SUMMARY_SENTENCES", "8-10")
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "6"))
 ALLOWED_CATEGORIES = [
     "Technology",
@@ -198,7 +198,7 @@ def summarize_with_ollama(title: str, content: str) -> str:
         "stream": False,
         "options": {
             "temperature": 0.3,
-            "num_predict": 256,
+            "num_predict": 800,
         }
     }
 
