@@ -3,7 +3,7 @@
  * Displays a news article in a card format
  */
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NewsArticle } from '../types';
@@ -18,6 +19,7 @@ import { useTheme } from '../utils/hooks';
 import { formatRelativeTime } from '../utils/formatters';
 import { useBookmarksStore } from '../store';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ExplainerView } from './ExplainerView';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
@@ -34,9 +36,38 @@ export const NewsCard: React.FC<NewsCardProps> = ({
   variant = 'default',
 }) => {
   const theme = useTheme();
+  const [showExplainer, setShowExplainer] = useState(false);
   const { toggleBookmark, isBookmarked } = useBookmarksStore();
   const bookmarked = isBookmarked(article.id);
-  
+
+  // Double-tap detection
+  const lastTapRef = useRef<number>(0);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handleDoubleClickButton = (e: any) => {
+    e.stopPropagation(); // prevent the card's onPress from firing
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300; // ms
+
+    if (now - lastTapRef.current < DOUBLE_TAP_DELAY) {
+      // Second tap within window — trigger explainer
+      lastTapRef.current = 0;
+      // Pulse animation feedback
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 1.15, duration: 100, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+      ]).start();
+      setShowExplainer(true);
+    } else {
+      // First tap — record time and give subtle press feedback
+      lastTapRef.current = now;
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 0.93, duration: 80, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
+      ]).start();
+    }
+  };
+
   const handleBookmark = (e: any) => {
     e.stopPropagation();
     toggleBookmark(article.id);
@@ -126,6 +157,24 @@ export const NewsCard: React.FC<NewsCardProps> = ({
         style={styles.image}
         resizeMode="cover"
       />
+      
+      {/* Magic Double Click Button overlay */}
+      <Animated.View style={{ transform: [{ scale: scaleAnim }], ...styles.doubleClickOverlay }}>
+        <TouchableOpacity
+          onPress={handleDoubleClickButton}
+        >
+          <LinearGradient
+            colors={['#8B5CF6', '#3B82F6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.doubleClickGradient}
+          >
+            <Ionicons name="sparkles" size={14} color="#FFF" />
+            <Text style={styles.doubleClickText}>Double Click</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
       <View style={styles.titleWrapper}>
         <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={3}>
           {article.title}
@@ -163,6 +212,11 @@ export const NewsCard: React.FC<NewsCardProps> = ({
           </View>
         </View>
       </View>
+      {showExplainer && (
+        <View style={{...StyleSheet.absoluteFillObject, zIndex: 999, elevation: 999}}>
+          <ExplainerView articleId={article.id} onClose={() => setShowExplainer(false)} />
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -178,6 +232,32 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 200,
+  },
+  doubleClickOverlay: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 100,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  doubleClickGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  doubleClickText: {
+    color: '#FFF',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   content: {
     paddingHorizontal: 16,

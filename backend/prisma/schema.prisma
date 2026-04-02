@@ -42,6 +42,7 @@ model Article {
   updatedAt   DateTime   @updatedAt @map("updated_at")
   bookmarks   Bookmark[]
   likes       Like[]
+  explainer   Explainer?
 
   @@index([category])
   @@index([publishedAt])
@@ -92,3 +93,19 @@ model Category {
 /// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
 // model subscriptions {
 // }
+
+model Explainer {
+  id          String   @id @default(uuid())
+  articleId   String   @unique @map("article_id")
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tier        Int      // 1, 2, or 3
+  headline    String
+  whyItMatters String  @map("why_it_matters")
+  content     String   @db.Text
+  ozScore     Float?   @map("oz_score")
+  status      String   @default("draft") // "draft", "published", "rejected"
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("explainers")
+}

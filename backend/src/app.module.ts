@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
+import { ExplainerModule } from './explainer/explainer.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
 
@@ -19,6 +20,7 @@ import { HealthController } from './health/health.controller';
     UsersModule,
     ArticlesModule,
     BookmarksModule,
+    ExplainerModule,
   ],
   controllers: [HealthController],
 })

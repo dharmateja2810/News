@@ -7,7 +7,7 @@ export class ExplainerService {
   private apiProvider: 'ollama' | 'openai' | 'anthropic';
   private apiKey: string;
   private ollamaUrl = 'http://localhost:11434/api/generate';
-  private modelName = 'llama3';
+  private modelName = 'llama2';
 
   constructor(private prisma: PrismaService) {
     if (process.env.OPENAI_API_KEY) {
@@ -20,7 +20,7 @@ export class ExplainerService {
       this.modelName = 'claude-3-5-sonnet-20240620';
     } else {
       this.apiProvider = 'ollama';
-      this.modelName = process.env.OLLAMA_MODEL || 'llama3'; // or 'llama2'
+      this.modelName = process.env.OLLAMA_MODEL || 'llama2';
     }
     
     this.logger.log(`Initialized ExplainerService using provider: ${this.apiProvider} with model: ${this.modelName}`);

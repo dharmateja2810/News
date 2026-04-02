@@ -1,5 +1,5 @@
 /**
- * Home Screen - TikTok Style
+ * Home Screen - Bloomberg Card Style
  * Full-screen vertical scrolling news feed
  */
 
@@ -15,9 +15,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Share,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ExplainerView } from '../components/ExplainerView';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
@@ -32,6 +35,7 @@ export const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
+  const [activeExplainerId, setActiveExplainerId] = useState<string | null>(null);
   const { toggleSave: handleSave, isSaved } = useSavedArticles();
   const { colors } = useTheme();
   const lastTapRef = React.useRef<{ [key: string]: number }>({});
@@ -108,12 +112,8 @@ export const HomeScreen: React.FC = () => {
     const lastTap = lastTapRef.current[articleId] || 0;
 
     if (now - lastTap < DOUBLE_TAP_DELAY) {
-      // Double tap detected - toggle like
-      void (async () => {
-        // Optimistic
-        handleLike(articleId);
-        // Backend mode (future): wire like API here if needed.
-      })();
+      // Double tap detected - pop up the AI explainer!
+      setActiveExplainerId(articleId);
     }
     lastTapRef.current[articleId] = now;
   };
@@ -122,102 +122,153 @@ export const HomeScreen: React.FC = () => {
     const isLiked = likedArticles.has(item.id);
     const articleIsSaved = isSaved(item.id);
     const likeCount = item.likeCount ?? 0;
-    const titleWords = item.title.trim().split(/\s+/).filter(Boolean).length;
-    const titleLines = titleWords > 10 ? 3 : 2;
+
+    // Derive a short key-takeaway from the first 1-2 sentences of the description.
+    const fullText = (item.description || '').trim();
+    const sentences = fullText.match(/[^.!?]+[.!?]+/g) || [];
+    const keyTakeaway = sentences.slice(0, 2).join(' ').trim() || fullText.slice(0, 120);
+    const bodyText = sentences.slice(2, 8).join(' ').trim() || fullText.slice(keyTakeaway.length).trim();
+
+    // Build sources label: source name + "· time"
+    const sourcesLabel = [item.source, item.time].filter(Boolean).join('  ·  ');
+
+    // Category colour map
+    const categoryColors: Record<string, string> = {
+      Markets: '#3B82F6',
+      Business: '#10B981',
+      Technology: '#8B5CF6',
+      Politics: '#EF4444',
+      Sports: '#F59E0B',
+      Health: '#06B6D4',
+      Science: '#6366F1',
+      Entertainment: '#EC4899',
+      World: '#14B8A6',
+    };
+    const catColor = categoryColors[item.category] ?? '#3B82F6';
 
     return (
       <View style={[styles.newsItem, { height: pageHeight }]}>
-        {/* Top Half - Image */}
-        <TouchableOpacity
-          style={[styles.imageContainer, { height: imageHeight }]}
-          activeOpacity={1}
-          onPress={() => handleDoubleTap(item.id)}
-        >
+        {/* ── IMAGE AREA ── */}
+        <View style={[styles.imageContainer, { height: imageHeight }]}>
           <Image source={{ uri: item.imageUrl }} style={styles.newsImage} />
-        </TouchableOpacity>
+          {/* Dark gradient over the image for readability */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)']}
+            style={StyleSheet.absoluteFillObject}
+          />
 
-        {/* Bottom Half - Content */}
-        <View style={[styles.contentContainer, { backgroundColor: colors.background, height: contentHeight }]}>
-          {/* Title - full width */}
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={titleLines}>
+          {/* BREAKING badge – top left */}
+          <View style={styles.breakingBadge}>
+            <Text style={styles.breakingText}>BREAKING</Text>
+          </View>
+
+          {/* AI Explainer pill – top right */}
+          <TouchableOpacity
+            style={styles.aiPill}
+            onPress={() => setActiveExplainerId(item.id)}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#8B5CF6', '#3B82F6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.aiPillGradient}
+            >
+              <Ionicons name="sparkles" size={12} color="#FFF" />
+              <Text style={styles.aiPillText}>AI Explain</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── CONTENT AREA ── */}
+        <View style={[styles.contentCard, { height: contentHeight }]}>
+          {/* Row 1: Category pill + sources/time */}
+          <View style={styles.metaRow}>
+            <View style={[styles.categoryPill, { borderColor: catColor }]}>
+              <Text style={[styles.categoryPillText, { color: catColor }]}>
+                {item.category.toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.likeRow}>
+              <Ionicons name="newspaper-outline" size={12} color="#888" />
+              <Text style={styles.sourcesCount}>{sourcesLabel}</Text>
+            </View>
+          </View>
+
+          {/* Title */}
+          <Text style={styles.cardTitle} numberOfLines={3}>
             {item.title}
           </Text>
 
-          {/* Description + Actions row */}
-          <View style={styles.descriptionActionsRow}>
-            {/* Description side */}
-            {(() => {
-              const full = (item.description || '').trim();
-              const MAX_WORDS = 140;
-              const words = full.split(/\s+/).filter(Boolean);
-              const preview = words.slice(0, MAX_WORDS).join(' ');
-              return (
-                <View style={styles.descriptionContainer}>
-                  <Text
-                    style={[styles.description, { color: colors.textSecondary }]}
-                    numberOfLines={16}
-                    ellipsizeMode="clip"
-                  >
-                    {preview}
-                  </Text>
+          {/* Key takeaway – blue left-border quote */}
+          {keyTakeaway.length > 0 && (
+            <View style={styles.takeawayBlock}>
+              <Text style={styles.takeawayText} numberOfLines={3}>
+                {keyTakeaway}
+              </Text>
+            </View>
+          )}
 
-                  {/* Meta Info */}
-                  <View style={styles.meta}>
-                    <Text style={[styles.source, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {item.source}
-                    </Text>
-                    <Text style={[styles.dot, { color: colors.border }]}>•</Text>
-                    <Text style={[styles.time, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {item.time || ' '}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })()}
+          {/* Body text */}
+          {bodyText.length > 0 && (
+            <Text style={styles.bodyText} numberOfLines={5}>
+              {bodyText}
+            </Text>
+          )}
 
-            {/* Right-side vertical actions */}
-            <View style={styles.rightActions}>
+          {/* ── BOTTOM ROW ── */}
+          <View style={styles.bottomRow}>
+            {/* View more button */}
+            <TouchableOpacity
+              style={styles.viewMoreBtn}
+              onPress={() => item.sourceUrl ? void Linking.openURL(item.sourceUrl) : undefined}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={16} color={colors.text} />
+              <Text style={[styles.viewMoreText, { color: colors.text }]}>View more</Text>
+            </TouchableOpacity>
+
+            {/* Right icons */}
+            <View style={styles.bottomActions}>
               {/* Like */}
               <TouchableOpacity
-                style={styles.actionButton}
+                style={styles.iconBtn}
                 onPress={() => void handleLike(item.id)}
                 activeOpacity={0.7}
               >
                 <Ionicons
                   name={isLiked ? 'heart' : 'heart-outline'}
-                  size={24}
-                  color={isLiked ? '#ff4444' : colors.text}
+                  size={20}
+                  color={isLiked ? '#ef4444' : '#888'}
                 />
-                <Text style={[styles.actionCount, { color: colors.text }]}>
-                  {isLiked ? likeCount + 1 : likeCount}
-                </Text>
               </TouchableOpacity>
-
               {/* Save */}
               <TouchableOpacity
-                style={styles.actionButton}
+                style={styles.iconBtn}
                 onPress={() => void handleSave(item.id)}
                 activeOpacity={0.7}
               >
                 <Ionicons
                   name={articleIsSaved ? 'bookmark' : 'bookmark-outline'}
-                  size={24}
-                  color={articleIsSaved ? '#0f4c75' : colors.text}
+                  size={20}
+                  color={articleIsSaved ? catColor : '#888'}
                 />
-                <Text style={[styles.actionCount, { color: colors.text }]}>Save</Text>
               </TouchableOpacity>
-
               {/* Share */}
               <TouchableOpacity
-                style={styles.actionButton}
+                style={styles.iconBtn}
                 onPress={() => void Share.share({ message: item.sourceUrl })}
                 activeOpacity={0.7}
               >
-                <Ionicons name="share-outline" size={24} color={colors.text} />
-                <Text style={[styles.actionCount, { color: colors.text }]}>Share</Text>
+                <Ionicons name="share-outline" size={20} color="#888" />
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Source names footer */}
+          <Text style={styles.sourceFooter} numberOfLines={1}>
+            {item.source}
+          </Text>
         </View>
       </View>
     );
@@ -315,17 +366,28 @@ export const HomeScreen: React.FC = () => {
           />
         )}
       </View>
+      
+      {/* Global Explainer Overlay */}
+      {activeExplainerId && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 9999 }]}>
+          <ExplainerView 
+            articleId={activeExplainerId} 
+            onClose={() => setActiveExplainerId(null)} 
+          />
+        </View>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  // ── Screen chrome ──────────────────────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0f',
   },
   tabsBar: {
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: 'rgba(0,0,0,0.92)',
   },
   tabsContent: {
     paddingHorizontal: 16,
@@ -338,7 +400,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   tabUnderline: {
@@ -350,72 +412,184 @@ const styles = StyleSheet.create({
   listArea: {
     flex: 1,
   },
+
+  // ── Card shell ─────────────────────────────────────────────────────────────
   newsItem: {
     width,
   },
+
+  // ── Image area ─────────────────────────────────────────────────────────────
   imageContainer: {
     width: '100%',
+    overflow: 'hidden',
   },
   newsImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 28,
+
+  // BREAKING badge
+  breakingBadge: {
+    position: 'absolute',
+    top: 18,
+    left: 18,
+    backgroundColor: '#0a0a0f',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 10,
+  },
+  breakingText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+
+  // AI pill (top-right)
+  aiPill: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 10,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  aiPillGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 5,
+  },
+  aiPillText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+
+  // ── Content card ───────────────────────────────────────────────────────────
+  contentCard: {
+    backgroundColor: '#16161d',
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 10,
     overflow: 'hidden',
   },
-  title: {
-    fontSize: 19,
-    fontWeight: '800',
+
+  // Category pill + sources row
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 10,
-    lineHeight: 26,
+    gap: 10,
   },
-  descriptionActionsRow: {
+  categoryPill: {
+    borderWidth: 1.5,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  categoryPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  likeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  description: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 8,
-    textAlign: 'justify',
+  sourcesCount: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '500',
   },
-  descriptionContainer: {
-    flex: 1,
+
+  // Title
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#f0f0f5',
+    lineHeight: 25,
+    marginBottom: 10,
   },
-  meta: {
+
+  // Key takeaway block (blue left border)
+  takeawayBlock: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+    paddingLeft: 10,
+    marginBottom: 10,
+  },
+  takeawayText: {
+    fontSize: 13.5,
+    fontStyle: 'italic',
+    color: '#b0b8cc',
+    lineHeight: 20,
+  },
+
+  // Body
+  bodyText: {
+    fontSize: 14,
+    color: '#9a9aaa',
+    lineHeight: 21,
+    marginBottom: 10,
+  },
+
+  // ── Bottom row ─────────────────────────────────────────────────────────────
+  bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  source: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dot: {
-    fontSize: 14,
-    marginHorizontal: 8,
-  },
-  time: {
-    fontSize: 14,
-  },
-  rightActions: {
+  viewMoreBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingLeft: 12,
-    paddingTop: 4,
-    gap: 14,
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
   },
-  actionButton: {
+  viewMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#f0f0f5',
+  },
+  bottomActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
-  actionCount: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 3,
+  iconBtn: {
+    padding: 4,
   },
+
+  // Sources footer
+  sourceFooter: {
+    fontSize: 11,
+    color: '#555',
+    marginTop: 6,
+    textAlign: 'right',
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+
+  // ── Loading / empty states ──────────────────────────────────────────────────
   loading: {
     flex: 1,
     alignItems: 'center',
