@@ -55,7 +55,7 @@ export const ArticleDetailScreen: React.FC = () => {
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image
-            source={{ uri: article.imageUrl }}
+            source={require('../../assets/icon.png')}
             style={styles.heroImage}
             resizeMode="cover"
           />

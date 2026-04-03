@@ -7,6 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Existing Models ───────────────────────────────────────────────────────────
+
 model User {
   id             String     @id @default(uuid())
   email          String     @unique
@@ -28,24 +30,39 @@ model User {
 }
 
 model Article {
-  id          String     @id @default(uuid())
-  title       String
-  description String?
-  content     String?
-  imageUrl    String?    @map("image_url")
-  source      String
-  category    String
-  author      String?
-  publishedAt DateTime?  @map("published_at")
-  url         String     @unique
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  bookmarks   Bookmark[]
-  likes       Like[]
-  explainer   Explainer?
+  id              String           @id @default(uuid())
+  title           String
+  description     String?
+  content         String?          @db.Text
+  body            String?          @db.Text
+  summary         String?          @db.Text
+  imageUrl        String?          @map("image_url")
+  source          String
+  category        String
+  author          String?
+  publishedAt     DateTime?        @map("published_at")
+  url             String           @unique
+  scrapedAt       DateTime?        @default(now()) @map("scraped_at")
+  isOpinion       Boolean          @default(false) @map("is_opinion")
+  isPaywalled     Boolean          @default(false) @map("is_paywalled")
+  sourceAuthority Float            @default(0.5) @map("source_authority")
+  dedupHash       String?          @map("dedup_hash")
+  processed       Boolean          @default(false)
+  entities        Json?            @db.JsonB
+  clusterId       String?          @map("cluster_id")
+  cluster         StoryCluster?    @relation(fields: [clusterId], references: [id])
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  bookmarks       Bookmark[]
+  likes           Like[]
+  explainer       Explainer?
+  clusterLinks    ClusterArticle[]
 
   @@index([category])
   @@index([publishedAt])
+  @@index([dedupHash])
+  @@index([processed])
+  @@index([clusterId])
   @@map("articles")
 }
 
@@ -82,30 +99,131 @@ model Category {
   @@map("categories")
 }
 
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model digests {
-// }
-
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model ingested_items {
-// }
-
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model subscriptions {
-// }
-
 model Explainer {
-  id          String   @id @default(uuid())
-  articleId   String   @unique @map("article_id")
-  article     Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  tier        Int      // 1, 2, or 3
-  headline    String
-  whyItMatters String  @map("why_it_matters")
-  content     String   @db.Text
-  ozScore     Float?   @map("oz_score")
-  status      String   @default("draft") // "draft", "published", "rejected"
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  articleId    String   @unique @map("article_id")
+  article      Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tier         Int      // 1, 2, or 3
+  headline     String
+  whyItMatters String   @map("why_it_matters")
+  content      String   @db.Text
+  ozScore      Float?   @map("oz_score")
+  status       String   @default("draft") // "draft", "published", "rejected"
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("explainers")
+}
+
+// ─── Pipeline Models (from TechSpec) ───────────────────────────────────────────
+
+model Source {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  rssUrl           String?  @map("rss_url")
+  scrapeUrl        String?  @map("scrape_url")
+  authorityScore   Float    @default(0.5) @map("authority_score")
+  scrapeInterval   Int      @default(30) @map("scrape_interval") // minutes
+  isActive         Boolean  @default(true) @map("is_active")
+  requiresAuFilter Boolean  @default(false) @map("requires_au_filter")
+  isPaywalled      Boolean  @default(false) @map("is_paywalled")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("sources")
+}
+
+model StoryCluster {
+  id                 String           @id @default(uuid())
+  topic              String?
+  category           String?
+  firstSeenAt        DateTime?        @map("first_seen_at")
+  lastUpdatedAt      DateTime?        @map("last_updated_at")
+  articleCount       Int              @default(0) @map("article_count")
+  uniqueSourceCount  Int              @default(0) @map("unique_source_count")
+  hasPaywalled       Boolean          @default(false) @map("has_paywalled")
+  opinionRatio       Float            @default(0.0) @map("opinion_ratio")
+  clusterQuality     Float            @default(0.0) @map("cluster_quality")
+  ozScore            Float            @default(0.0) @map("oz_score")
+  ozScoreMorning     Float            @default(0.0) @map("oz_score_morning")
+  ozScoreEvening     Float            @default(0.0) @map("oz_score_evening")
+  impactScore        Float?           @map("impact_score")
+  auRelevanceScore   Float?           @map("au_relevance_score")
+  engagementScore    Float?           @map("engagement_score")
+  tier               Int?
+  isBreaking         Boolean          @default(false) @map("is_breaking")
+  breakingFiredAt    DateTime?        @map("breaking_fired_at")
+  status             String           @default("active") // active | archived | suppressed
+  articles           Article[]
+  clusterArticles    ClusterArticle[]
+  editorQueueItems   EditorQueue[]
+  publishedStories   PublishedStory[]
+
+  @@index([ozScore])
+  @@index([status])
+  @@index([category])
+  @@index([isBreaking])
+  @@map("story_clusters")
+}
+
+model ClusterArticle {
+  clusterId String       @map("cluster_id")
+  articleId String       @map("article_id")
+  isPrimary Boolean      @default(false) @map("is_primary")
+  addedAt   DateTime     @default(now()) @map("added_at")
+  cluster   StoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  article   Article      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([clusterId, articleId])
+  @@map("cluster_articles")
+}
+
+model EditorQueue {
+  id              String          @id @default(uuid())
+  clusterId       String          @map("cluster_id")
+  cluster         StoryCluster    @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  edition         String          // 'morning' | 'evening' | 'breaking'
+  editionDate     DateTime        @map("edition_date") @db.Date
+  suggestedRank   Int?            @map("suggested_rank")
+  aiHeadline      String?         @map("ai_headline")
+  aiSummary       String?         @map("ai_summary") @db.Text
+  aiWhyMatters    String?         @map("ai_why_matters")
+  aiDoubleClick   String?         @map("ai_double_click") @db.Text
+  aiImagePrompt   String?         @map("ai_image_prompt")
+  status          String          @default("pending") // pending | approved | edited | rejected | deferred
+  editorHeadline  String?         @map("editor_headline")
+  editorSummary   String?         @map("editor_summary") @db.Text
+  editorNotes     String?         @map("editor_notes") @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at")
+  reviewedAt      DateTime?       @map("reviewed_at")
+  publishedStory  PublishedStory?
+
+  @@index([edition, editionDate])
+  @@index([status])
+  @@map("editor_queue")
+}
+
+model PublishedStory {
+  id             String       @id @default(uuid())
+  clusterId      String       @map("cluster_id")
+  cluster        StoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  queueId        String       @unique @map("queue_id")
+  queueItem      EditorQueue  @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  edition        String       // 'morning' | 'evening' | 'breaking'
+  editionDate    DateTime     @map("edition_date") @db.Date
+  feedRank       Int?         @map("feed_rank")
+  headline       String
+  summary        String       @db.Text
+  whyMatters     String       @map("why_matters")
+  doubleClick    String       @map("double_click") @db.Text
+  category       String
+  tier           Int
+  illustrationId String?      @map("illustration_id")
+  isBreaking     Boolean      @default(false) @map("is_breaking")
+  publishedAt    DateTime     @default(now()) @map("published_at")
+
+  @@index([edition, editionDate])
+  @@index([publishedAt])
+  @@index([isBreaking])
+  @@map("published_stories")
 }

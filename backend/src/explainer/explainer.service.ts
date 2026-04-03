@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ExplainerService {
@@ -9,21 +10,30 @@ export class ExplainerService {
   private ollamaUrl = 'http://localhost:11434/api/generate';
   private modelName = 'llama2';
 
-  constructor(private prisma: PrismaService) {
-    if (process.env.OPENAI_API_KEY) {
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const anthropicKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+
+    if (openaiKey) {
       this.apiProvider = 'openai';
-      this.apiKey = process.env.OPENAI_API_KEY;
+      this.apiKey = openaiKey;
       this.modelName = 'gpt-4o';
-    } else if (process.env.ANTHROPIC_API_KEY) {
+    } else if (anthropicKey) {
       this.apiProvider = 'anthropic';
-      this.apiKey = process.env.ANTHROPIC_API_KEY;
-      this.modelName = 'claude-3-5-sonnet-20240620';
+      this.apiKey = anthropicKey;
+      this.modelName = 'claude-sonnet-4-20250514';
     } else {
       this.apiProvider = 'ollama';
-      this.modelName = process.env.OLLAMA_MODEL || 'llama2';
+      this.modelName =
+        this.configService.get<string>('OLLAMA_MODEL') || 'llama2';
     }
-    
-    this.logger.log(`Initialized ExplainerService using provider: ${this.apiProvider} with model: ${this.modelName}`);
+
+    this.logger.log(
+      `Initialized ExplainerService using provider: ${this.apiProvider} with model: ${this.modelName}`,
+    );
   }
 
   async generateExplainer(articleId: string) {
@@ -52,17 +62,48 @@ export class ExplainerService {
       this.logger.log(`Generating headline and why it matters...`);
       const meta = await this.generateHeadlineMeta(contentForPrompt, facts);
 
-      // Determine Tier (Rule-based: e.g. depending on word count or just defaulting to 2)
+      // Determine tier and OzScore from cluster (if article belongs to one),
+      // otherwise fall back to content-length heuristic.
       let tier = 2;
-      let ozScore = 60; // Mock score
-      if (article.content && article.content.length > 5000) {
-        tier = 1; ozScore = 90;
-      } else if (article.content && article.content.length < 1000) {
-        tier = 3; ozScore = 30;
+      let ozScore = 0.5;
+
+      if (article.clusterId) {
+        const cluster = await this.prisma.storyCluster.findUnique({
+          where: { id: article.clusterId },
+          select: { ozScore: true, tier: true },
+        });
+
+        if (cluster) {
+          ozScore = cluster.ozScore ?? 0.5;
+          if (cluster.tier) {
+            tier = cluster.tier;
+          } else {
+            // Derive tier from OzScore if cluster has no tier yet
+            if (ozScore >= 0.7) tier = 1;
+            else if (ozScore >= 0.4) tier = 2;
+            else tier = 3;
+          }
+        }
+      } else {
+        // Fallback: rule-based on content length
+        if (article.content && article.content.length > 5000) {
+          tier = 1;
+          ozScore = 0.9;
+        } else if (article.content && article.content.length < 1000) {
+          tier = 3;
+          ozScore = 0.3;
+        }
       }
 
       this.logger.log(`Generating explainer at Tier ${tier}...`);
       const explainerBody = await this.generateExplainerBody(meta, facts, tier);
+
+      // Run quality guardrails
+      const guardrailResult = this.runGuardrails(explainerBody, facts, tier);
+      const status = guardrailResult.shouldReject ? 'draft' : 'published';
+      if (guardrailResult.flags.length > 0) {
+        this.logger.warn(`Guardrail flags for article ${articleId}: ${guardrailResult.flags.join(', ')}`);
+      }
 
       // Save to database
       const newExplainer = await this.prisma.explainer.create({
@@ -73,7 +114,7 @@ export class ExplainerService {
           whyItMatters: meta.whyItMatters,
           content: explainerBody,
           ozScore,
-          status: 'published',
+          status,
         },
       });
 
@@ -120,6 +161,7 @@ export class ExplainerService {
           ],
           temperature: 0.5,
           max_tokens: maxTokens,
+          top_p: 0.9,
         }),
       });
       if (!response.ok) {
@@ -143,6 +185,7 @@ export class ExplainerService {
           ],
           temperature: 0.5,
           max_tokens: maxTokens,
+          top_p: 0.9,
         }),
       });
       if (!response.ok) {
@@ -231,7 +274,9 @@ FORMAT:
     if (tier === 1) {
       tokens = 1200;
       userPrompt = `Write a Tier 1 OzShorts Double Click explainer. Target: 500–600 words.
-Headline Context: ${meta.headline}
+
+STORY CLUSTER:
+Headline: ${meta.headline}
 Why It Matters: ${meta.whyItMatters}
 
 SOURCE FACTS (use these — do not invent figures):
@@ -250,7 +295,9 @@ Do not label these sections. Write as continuous prose.`;
     } else if (tier === 2) {
       tokens = 700;
       userPrompt = `Write a Tier 2 OzShorts Double Click explainer. Target: 300–400 words.
-Headline Context: ${meta.headline}
+
+STORY CLUSTER:
+Headline: ${meta.headline}
 Why It Matters: ${meta.whyItMatters}
 
 SOURCE FACTS (use these — do not invent figures):
@@ -266,7 +313,9 @@ Do not label these sections. Write as continuous prose.`;
     } else {
       tokens = 400;
       userPrompt = `Write a Tier 3 OzShorts Double Click explainer. Target: 150–200 words.
-Headline Context: ${meta.headline}
+
+STORY CLUSTER:
+Headline: ${meta.headline}
 Why It Matters: ${meta.whyItMatters}
 
 SOURCE FACTS:
@@ -281,5 +330,144 @@ Do not editorialize. Do not speculate. Facts only. Do not label these sections. 
     }
 
     return this.callLlm(systemPrompt, userPrompt, tokens);
+  }
+
+  /** Generate a 50-60 word card summary for the feed card. */
+  async generateCardSummary(clusterSummary: string, facts: string): Promise<string> {
+    const systemPrompt = `You are OzShorts, an Australian news explainer. Write a short card summary for a news feed.`;
+    const userPrompt = `Write a card summary in exactly 50–60 words. Plain English, no jargon. One paragraph. State what happened and why it matters to an Australian professional. Do not editorialize.
+
+STORY:
+${clusterSummary}
+
+FACTS:
+${facts}
+
+Output the summary text only — no labels, no quotes.`;
+    return this.callLlm(systemPrompt, userPrompt, 150);
+  }
+
+  /** Generate a full Double Click package for a cluster: headline, why it matters, card summary, and explainer body. */
+  async generateForCluster(clusterId: string): Promise<{
+    headline: string;
+    whyItMatters: string;
+    cardSummary: string;
+    explainerBody: string;
+    tier: number;
+    guardrailFlags: string[];
+  }> {
+    const cluster = await this.prisma.storyCluster.findUnique({
+      where: { id: clusterId },
+      include: {
+        articles: { orderBy: { sourceAuthority: 'desc' }, take: 5 },
+      },
+    });
+    if (!cluster) throw new Error(`Cluster ${clusterId} not found`);
+
+    // Build cluster summary from top articles
+    const clusterSummary = cluster.articles
+      .map(a => `[${a.source}] ${a.title}\n${a.description || ''}\n${a.content || a.body || ''}`)
+      .join('\n---\n');
+
+    const tier = cluster.tier ?? (cluster.ozScore >= 0.7 ? 1 : cluster.ozScore >= 0.4 ? 2 : 3);
+
+    const facts = await this.extractFacts(clusterSummary);
+    const meta = await this.generateHeadlineMeta(clusterSummary, facts);
+    const explainerBody = await this.generateExplainerBody(meta, facts, tier);
+    const cardSummary = await this.generateCardSummary(clusterSummary, facts);
+
+    const guardrailResult = this.runGuardrails(explainerBody, facts, tier);
+
+    return {
+      headline: meta.headline,
+      whyItMatters: meta.whyItMatters,
+      cardSummary,
+      explainerBody,
+      tier,
+      guardrailFlags: guardrailResult.flags,
+    };
+  }
+
+  /**
+   * Quality guardrails from Double Click Framework section 5.6.
+   * Returns flags for editor review and whether to reject + regenerate.
+   */
+  private runGuardrails(
+    content: string,
+    facts: string,
+    tier: number,
+  ): { flags: string[]; shouldReject: boolean } {
+    const flags: string[] = [];
+    let shouldReject = false;
+
+    // 1. Word count check
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
+    const ranges: Record<number, [number, number]> = {
+      1: [500, 600],
+      2: [300, 400],
+      3: [150, 200],
+    };
+    const [min, max] = ranges[tier] || [150, 600];
+    if (wordCount < min || wordCount > max) {
+      flags.push(`word-count-out-of-range: ${wordCount} words (target ${min}-${max})`);
+    }
+
+    // 2. Forbidden opening words
+    const forbiddenStarts = ['However', 'Furthermore', 'In conclusion'];
+    const sentences = content.split(/(?<=[.!?])\s+/);
+    for (const s of sentences) {
+      const trimmed = s.trim();
+      for (const f of forbiddenStarts) {
+        if (trimmed.startsWith(f)) {
+          flags.push(`forbidden-opener: sentence starts with "${f}"`);
+        }
+      }
+    }
+
+    // 3. Forbidden phrases
+    const forbiddenPhrases = [
+      'It is worth noting that',
+      'It is important to understand',
+      'It remains to be seen',
+      "In today's fast-moving",
+      'Experts say',
+    ];
+    for (const phrase of forbiddenPhrases) {
+      if (content.toLowerCase().includes(phrase.toLowerCase())) {
+        flags.push(`forbidden-phrase: "${phrase}"`);
+      }
+    }
+
+    // 4. Passive voice ratio estimate (simple heuristic: "was/were + past participle")
+    const passivePattern = /\b(was|were|is|are|been|being)\s+\w+ed\b/gi;
+    const passiveMatches = content.match(passivePattern) || [];
+    const passiveRatio = sentences.length > 0 ? passiveMatches.length / sentences.length : 0;
+    if (passiveRatio > 0.15) {
+      flags.push(`passive-voice-high: ${Math.round(passiveRatio * 100)}%`);
+    }
+
+    // 5. Check ending — should be forward-looking, not a summary
+    const lastParagraph = content.trim().split('\n\n').pop()?.trim() || '';
+    const summaryEndings = ['in summary', 'in conclusion', 'to summarise', 'to sum up', 'overall'];
+    for (const ending of summaryEndings) {
+      if (lastParagraph.toLowerCase().includes(ending)) {
+        flags.push('ending-is-summary: should be forward-looking "what to watch"');
+      }
+    }
+
+    // 6. Check for figures not in fact list (simple heuristic: numbers with % or $)
+    const contentNumbers = content.match(/\$?[\d,.]+%?/g) || [];
+    const factNumbers = facts.match(/\$?[\d,.]+%?/g) || [];
+    const factSet = new Set(factNumbers);
+    for (const num of contentNumbers) {
+      // Skip simple numbers like "1", "2", "3" which may be structural
+      if (num.length <= 2 && !num.includes('%') && !num.includes('$')) continue;
+      if (!factSet.has(num)) {
+        flags.push(`ungrounded-figure: ${num} not found in fact list`);
+        shouldReject = true;
+      }
+    }
+
+    return { flags, shouldReject };
   }
 }

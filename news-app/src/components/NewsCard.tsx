@@ -21,6 +21,8 @@ import { useBookmarksStore } from '../store';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExplainerView } from './ExplainerView';
 
+const SAMPLE_ILLUSTRATION = require('../../assets/icon.png');
+
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
 
@@ -81,7 +83,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({
         activeOpacity={0.9}
       >
         <Image
-          source={{ uri: article.imageUrl }}
+          source={SAMPLE_ILLUSTRATION}
           style={styles.featuredImage}
           resizeMode="cover"
         />
@@ -127,7 +129,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({
         activeOpacity={0.7}
       >
         <Image
-          source={{ uri: article.imageUrl }}
+          source={SAMPLE_ILLUSTRATION}
           style={styles.compactImage}
           resizeMode="cover"
         />
@@ -153,7 +155,7 @@ export const NewsCard: React.FC<NewsCardProps> = ({
       activeOpacity={0.8}
     >
       <Image
-        source={{ uri: article.imageUrl }}
+        source={SAMPLE_ILLUSTRATION}
         style={styles.image}
         resizeMode="cover"
       />

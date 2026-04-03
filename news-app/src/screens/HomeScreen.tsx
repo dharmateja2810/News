@@ -15,7 +15,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Share,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,6 +25,9 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { UiArticle } from '../services/articlesApi';
 import { listArticles, mapArticleToUi } from '../services/articlesApi';
 import { APP_CONFIG, NEWS_CATEGORIES } from '../constants/appConfig';
+import { NewsDetailModal } from './NewsDetailModal';
+
+const SAMPLE_ILLUSTRATION = require('../../assets/icon.png');
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,16 +38,15 @@ export const HomeScreen: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
   const [activeExplainerId, setActiveExplainerId] = useState<string | null>(null);
+  const [detailArticle, setDetailArticle] = useState<UiArticle | null>(null);
   const { toggleSave: handleSave, isSaved } = useSavedArticles();
   const { colors } = useTheme();
   const lastTapRef = React.useRef<{ [key: string]: number }>({});
   const listRef = React.useRef<FlatList<UiArticle>>(null);
 
   // Measure the available height for a single "page" so content isn't hidden behind the bottom tab bar.
-  const [pageHeight, setPageHeight] = useState(height);
-  // Reduce image height by ~20% (44% -> 35.2% of page height)
-  const imageHeight = Math.round(pageHeight * 0.352);
-  const contentHeight = Math.max(0, pageHeight - imageHeight);
+  const [pageHeight, setPageHeight] = useState(0);
+  const imageHeight = Math.round(pageHeight * 0.35);
 
   const [articles, setArticles] = useState<UiArticle[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -150,7 +151,7 @@ export const HomeScreen: React.FC = () => {
       <View style={[styles.newsItem, { height: pageHeight }]}>
         {/* ── IMAGE AREA ── */}
         <View style={[styles.imageContainer, { height: imageHeight }]}>
-          <Image source={{ uri: item.imageUrl }} style={styles.newsImage} />
+          <Image source={SAMPLE_ILLUSTRATION} style={styles.newsImage} />
           {/* Dark gradient over the image for readability */}
           <LinearGradient
             colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)']}
@@ -158,31 +159,15 @@ export const HomeScreen: React.FC = () => {
           />
 
           {/* BREAKING badge – top left */}
-          <View style={styles.breakingBadge}>
-            <Text style={styles.breakingText}>BREAKING</Text>
+          <View style={[styles.breakingBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.breakingText, { color: colors.text }]}>BREAKING</Text>
           </View>
 
-          {/* AI Explainer pill – top right */}
-          <TouchableOpacity
-            style={styles.aiPill}
-            onPress={() => setActiveExplainerId(item.id)}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#8B5CF6', '#3B82F6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.aiPillGradient}
-            >
-              <Ionicons name="sparkles" size={12} color="#FFF" />
-              <Text style={styles.aiPillText}>AI Explain</Text>
-            </LinearGradient>
-          </TouchableOpacity>
         </View>
 
         {/* ── CONTENT AREA ── */}
-        <View style={[styles.contentCard, { height: contentHeight }]}>
-          {/* Row 1: Category pill + sources/time */}
+        <View style={[styles.contentCard, { backgroundColor: colors.surface }]}>
+          {/* Category pill + sources/time */}
           <View style={styles.metaRow}>
             <View style={[styles.categoryPill, { borderColor: catColor }]}>
               <Text style={[styles.categoryPillText, { color: catColor }]}>
@@ -190,20 +175,20 @@ export const HomeScreen: React.FC = () => {
               </Text>
             </View>
             <View style={styles.likeRow}>
-              <Ionicons name="newspaper-outline" size={12} color="#888" />
-              <Text style={styles.sourcesCount}>{sourcesLabel}</Text>
+              <Ionicons name="newspaper-outline" size={12} color={colors.textTertiary} />
+              <Text style={[styles.sourcesCount, { color: colors.textTertiary }]}>{sourcesLabel}</Text>
             </View>
           </View>
 
           {/* Title */}
-          <Text style={styles.cardTitle} numberOfLines={3}>
+          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={3}>
             {item.title}
           </Text>
 
-          {/* Key takeaway – blue left-border quote */}
+          {/* Key takeaway */}
           {keyTakeaway.length > 0 && (
             <View style={styles.takeawayBlock}>
-              <Text style={styles.takeawayText} numberOfLines={3}>
+              <Text style={[styles.takeawayText, { color: colors.textSecondary }]} numberOfLines={3}>
                 {keyTakeaway}
               </Text>
             </View>
@@ -211,62 +196,36 @@ export const HomeScreen: React.FC = () => {
 
           {/* Body text */}
           {bodyText.length > 0 && (
-            <Text style={styles.bodyText} numberOfLines={5}>
+            <Text style={[styles.bodyText, { color: colors.textSecondary }]} numberOfLines={10}>
               {bodyText}
             </Text>
           )}
 
-          {/* ── BOTTOM ROW ── */}
-          <View style={styles.bottomRow}>
-            {/* View more button */}
+          {/* Icons row — right after description */}
+          <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
             <TouchableOpacity
-              style={styles.viewMoreBtn}
-              onPress={() => item.sourceUrl ? void Linking.openURL(item.sourceUrl) : undefined}
+              style={[styles.viewMoreBtn, { backgroundColor: colors.backgroundTertiary }]}
+              onPress={() => setDetailArticle(item)}
               activeOpacity={0.8}
             >
               <Ionicons name="add-circle-outline" size={16} color={colors.text} />
               <Text style={[styles.viewMoreText, { color: colors.text }]}>View more</Text>
             </TouchableOpacity>
 
-            {/* Right icons */}
             <View style={styles.bottomActions}>
-              {/* Like */}
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => void handleLike(item.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isLiked ? 'heart' : 'heart-outline'}
-                  size={20}
-                  color={isLiked ? '#ef4444' : '#888'}
-                />
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleLike(item.id)} activeOpacity={0.7}>
+                <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textTertiary} />
               </TouchableOpacity>
-              {/* Save */}
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => void handleSave(item.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={articleIsSaved ? 'bookmark' : 'bookmark-outline'}
-                  size={20}
-                  color={articleIsSaved ? catColor : '#888'}
-                />
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.id)} activeOpacity={0.7}>
+                <Ionicons name={articleIsSaved ? 'bookmark' : 'bookmark-outline'} size={20} color={articleIsSaved ? catColor : colors.textTertiary} />
               </TouchableOpacity>
-              {/* Share */}
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => void Share.share({ message: item.sourceUrl })}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="share-outline" size={20} color="#888" />
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.sourceUrl })} activeOpacity={0.7}>
+                <Ionicons name="share-outline" size={20} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Source names footer */}
-          <Text style={styles.sourceFooter} numberOfLines={1}>
+          <Text style={[styles.sourceFooter, { color: colors.textTertiary }]} numberOfLines={1}>
             {item.source}
           </Text>
         </View>
@@ -275,9 +234,9 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top category tabs (Inshorts-style) */}
-      <SafeAreaView edges={['top']} style={styles.tabsBar}>
+      <SafeAreaView edges={['top']} style={[styles.tabsBar, { backgroundColor: colors.surface }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -299,7 +258,7 @@ export const HomeScreen: React.FC = () => {
                 <Text
                   style={[
                     styles.tabText,
-                    { color: active ? colors.accent : 'rgba(255,255,255,0.65)' },
+                    { color: active ? colors.accent : colors.textTertiary },
                   ]}
                 >
                   {category === 'All' ? 'My Feed' : category}
@@ -321,7 +280,7 @@ export const HomeScreen: React.FC = () => {
           if (h > 0) setPageHeight(h);
         }}
       >
-        {isLoading && articles.length === 0 ? (
+        {pageHeight === 0 || (isLoading && articles.length === 0) ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color={colors.accent} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading news...</Text>
@@ -370,11 +329,27 @@ export const HomeScreen: React.FC = () => {
       {/* Global Explainer Overlay */}
       {activeExplainerId && (
         <View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 9999 }]}>
-          <ExplainerView 
-            articleId={activeExplainerId} 
-            onClose={() => setActiveExplainerId(null)} 
+          <ExplainerView
+            articleId={activeExplainerId}
+            onClose={() => setActiveExplainerId(null)}
           />
         </View>
+      )}
+
+      {detailArticle && (
+        <NewsDetailModal
+          visible={true}
+          article={{
+            id: detailArticle.id,
+            title: detailArticle.title,
+            description: detailArticle.body || detailArticle.title,
+            imageUrl: detailArticle.imageUrl || '',
+            source: detailArticle.source,
+            category: detailArticle.category,
+            sourceUrl: detailArticle.sourceUrl,
+          }}
+          onClose={() => setDetailArticle(null)}
+        />
       )}
     </View>
   );
@@ -450,40 +425,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  // AI pill (top-right)
-  aiPill: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    zIndex: 10,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  aiPillGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 5,
-  },
-  aiPillText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-
   // ── Content card ───────────────────────────────────────────────────────────
   contentCard: {
-    backgroundColor: '#16161d',
     paddingHorizontal: 18,
     paddingTop: 14,
     paddingBottom: 10,
-    overflow: 'hidden',
   },
 
   // Category pill + sources row
@@ -551,10 +497,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
   },
   viewMoreBtn: {
     flexDirection: 'row',

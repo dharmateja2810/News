@@ -28,6 +28,38 @@ async function main() {
 
   console.log('✅ Categories seeded');
 
+  // Seed Sources (from TechSpec section 2.2)
+  const sources = [
+    { name: 'AFR', slug: 'afr', rssUrl: 'https://www.afr.com/rss/feed.xml', authorityScore: 0.95, scrapeInterval: 15, isPaywalled: true },
+    { name: 'ABC News', slug: 'abc_news', rssUrl: 'https://www.abc.net.au/news/feed/2942460/rss.xml', authorityScore: 0.90, scrapeInterval: 15 },
+    { name: 'Reuters', slug: 'reuters', rssUrl: 'https://www.reutersagency.com/feed/', authorityScore: 0.92, scrapeInterval: 15, requiresAuFilter: true },
+    { name: 'Bloomberg', slug: 'bloomberg', rssUrl: 'https://feeds.bloomberg.com/markets/news.rss', authorityScore: 0.90, scrapeInterval: 15, requiresAuFilter: true },
+    { name: 'The Age / SMH', slug: 'smh', rssUrl: 'https://www.smh.com.au/rss/feed.xml', authorityScore: 0.82, scrapeInterval: 30 },
+    { name: 'Guardian Australia', slug: 'guardian_au', rssUrl: 'https://www.theguardian.com/au/rss', authorityScore: 0.78, scrapeInterval: 30 },
+    { name: 'Yahoo Finance', slug: 'yahoo_finance', rssUrl: 'https://au.finance.yahoo.com/news/rssindex', authorityScore: 0.55, scrapeInterval: 45, requiresAuFilter: true },
+    { name: 'MarketWatch', slug: 'marketwatch', rssUrl: 'https://feeds.marketwatch.com/marketwatch/topstories/', authorityScore: 0.60, scrapeInterval: 45, requiresAuFilter: true },
+    { name: 'TechCrunch', slug: 'techcrunch', rssUrl: 'https://techcrunch.com/feed/', authorityScore: 0.65, scrapeInterval: 45, requiresAuFilter: true },
+    { name: 'The Verge', slug: 'the_verge', rssUrl: 'https://www.theverge.com/rss/index.xml', authorityScore: 0.62, scrapeInterval: 45, requiresAuFilter: true },
+  ];
+
+  for (const src of sources) {
+    await prisma.source.upsert({
+      where: { slug: src.slug },
+      update: { authorityScore: src.authorityScore, rssUrl: src.rssUrl, scrapeInterval: src.scrapeInterval },
+      create: {
+        name: src.name,
+        slug: src.slug,
+        rssUrl: src.rssUrl,
+        authorityScore: src.authorityScore,
+        scrapeInterval: src.scrapeInterval,
+        isPaywalled: src.isPaywalled ?? false,
+        requiresAuFilter: src.requiresAuFilter ?? false,
+      },
+    });
+  }
+
+  console.log('✅ Sources seeded');
+
   // Seed Test User
   const hashedPassword = await bcrypt.hash('password123', 10);
   

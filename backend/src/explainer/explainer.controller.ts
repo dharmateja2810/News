@@ -33,4 +33,17 @@ export class ExplainerController {
       return { success: false, message: error.message };
     }
   }
+
+  @Post('cluster/:clusterId/generate')
+  @ApiOperation({ summary: 'Generate full Double Click package for a story cluster' })
+  @ApiParam({ name: 'clusterId' })
+  @HttpCode(200)
+  async generateForCluster(@Param('clusterId') clusterId: string) {
+    try {
+      const result = await this.explainerService.generateForCluster(clusterId);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  }
 }

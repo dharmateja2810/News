@@ -58,7 +58,7 @@ export const NewsDetailModal: React.FC<NewsDetailModalProps> = ({
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Image */}
           <View style={styles.imageContainer}>
-            <Image source={{ uri: article.imageUrl }} style={styles.image} />
+            <Image source={require('../../assets/icon.png')} style={styles.image} />
 
             {/* Close Button */}
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>

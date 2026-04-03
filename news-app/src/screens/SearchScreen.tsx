@@ -57,7 +57,7 @@ export const SearchScreen: React.FC = () => {
         setShowDetailModal(true);
       }}
     >
-      <Image source={{ uri: item.imageUrl }} style={styles.resultImage} />
+      <Image source={require('../../assets/icon.png')} style={styles.resultImage} />
       <View style={styles.resultContent}>
         <Text style={styles.resultCategory}>{item.category}</Text>
         <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>

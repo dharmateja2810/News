@@ -97,7 +97,7 @@ export const BookmarksScreen: React.FC = () => {
       onPress={() => openDetailView(index)}
       activeOpacity={0.7}
     >
-      <Image source={{ uri: item.imageUrl }} style={styles.articleImage} />
+      <Image source={require('../../assets/icon.png')} style={styles.articleImage} />
       <View style={styles.articleContent}>
         <Text style={styles.articleCategory}>{item.category}</Text>
         <Text style={[styles.articleTitle, { color: colors.text }]} numberOfLines={2}>
@@ -129,7 +129,7 @@ export const BookmarksScreen: React.FC = () => {
       <View style={[styles.newsItem, { height: pageHeight }]}>
         {/* Top Half - Image */}
         <View style={[styles.imageContainer, { height: imageHeight }]}>
-          <Image source={{ uri: item.imageUrl }} style={styles.newsImage} />
+          <Image source={require('../../assets/icon.png')} style={styles.newsImage} />
         </View>
 
         {/* Bottom Half - Content */}
