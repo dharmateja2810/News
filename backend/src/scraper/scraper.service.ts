@@ -67,9 +67,9 @@ export class ScraperService {
     const sources = await this.prisma.source.findMany({
       where: { isActive: true, scrapeInterval: { lte: 15 } },
     });
-    for (const source of sources) {
-      await this.scrapeSourceInternal(source);
-    }
+    await Promise.allSettled(
+      sources.map((s) => this.scrapeSourceInternal(s).catch((e) => this.logger.error(`${s.slug}: ${e.message}`))),
+    );
   }
 
   /** Standard sources (scrapeInterval > 15 min). */
@@ -79,9 +79,9 @@ export class ScraperService {
     const sources = await this.prisma.source.findMany({
       where: { isActive: true, scrapeInterval: { gt: 15 } },
     });
-    for (const source of sources) {
-      await this.scrapeSourceInternal(source);
-    }
+    await Promise.allSettled(
+      sources.map((s) => this.scrapeSourceInternal(s).catch((e) => this.logger.error(`${s.slug}: ${e.message}`))),
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────────
@@ -114,8 +114,18 @@ export class ScraperService {
     });
 
     const results: Record<string, number> = {};
-    for (const source of sources) {
-      results[source.slug] = await this.scrapeSourceInternal(source);
+    const settled = await Promise.allSettled(
+      sources.map(async (source) => {
+        const count = await this.scrapeSourceInternal(source);
+        return { slug: source.slug, count };
+      }),
+    );
+    for (const r of settled) {
+      if (r.status === 'fulfilled') {
+        results[r.value.slug] = r.value.count;
+      } else {
+        this.logger.error(`Source scrape failed: ${r.reason}`);
+      }
     }
     return results;
   }
