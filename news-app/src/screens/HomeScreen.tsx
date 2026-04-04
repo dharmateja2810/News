@@ -1,88 +1,244 @@
 /**
- * Home Screen - Bloomberg Card Style
- * Full-screen vertical scrolling news feed
+ * Home Screen — OzShorts spec-compliant card layout
+ *
+ * Card shows: Illustration, Headline, Summary, "Why it matters",
+ *             Category pill, Tier badge, Breaking label, Source count
+ * Double tap / "View more": opens the Double Click explainer
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   Dimensions,
   ScrollView,
   ActivityIndicator,
   Share,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExplainerView } from '../components/ExplainerView';
 import { useSavedArticles } from '../contexts/SavedArticlesContext';
 import { useTheme } from '../contexts/ThemeContext';
-import type { UiArticle } from '../services/articlesApi';
 import { listArticles, mapArticleToUi } from '../services/articlesApi';
+import type { UiArticle } from '../services/articlesApi';
+import { getLatestFeed, getStoryDetail } from '../services/feedApi';
+import type { FeedStory, FeedStoryDetail } from '../services/feedApi';
 import { APP_CONFIG, NEWS_CATEGORIES } from '../constants/appConfig';
-import { NewsDetailModal } from './NewsDetailModal';
-
-const SAMPLE_ILLUSTRATION = require('../../assets/icon.png');
-
-const { width, height } = Dimensions.get('window');
-
+import { PlaceholderIllustration } from '../components/PlaceholderIllustration';
+const { width } = Dimensions.get('window');
 const CATEGORIES = [...NEWS_CATEGORIES];
+
+// ── Unified card item shape ─────────────────────────────────────────────────
+
+interface CardItem {
+  id: string;
+  headline: string;
+  summary: string;
+  whyMatters: string;
+  category: string;
+  tier: number;
+  isBreaking: boolean;
+  sourceCount: number;
+  source: string;
+  time: string;
+  sourceUrl: string;
+  /** If this came from /feed, we have the published story id for double-click */
+  publishedStoryId?: string;
+}
+
+/** Map a FeedStory (published) to CardItem */
+function feedStoryToCard(s: FeedStory): CardItem {
+  return {
+    id: s.id,
+    headline: s.headline,
+    summary: s.summary,
+    whyMatters: s.whyMatters || '',
+    category: s.category,
+    tier: s.tier,
+    isBreaking: s.isBreaking,
+    sourceCount: s.cluster?.uniqueSourceCount ?? 1,
+    source: s.cluster?.topic ?? s.category,
+    time: formatRelativeTime(s.publishedAt),
+    sourceUrl: '',
+    publishedStoryId: s.id,
+  };
+}
+
+/** Map a raw UiArticle (fallback) to CardItem */
+function articleToCard(a: UiArticle): CardItem {
+  const sentences = (a.description || '').match(/[^.!?]+[.!?]+/g) || [];
+  return {
+    id: a.id,
+    headline: a.title,
+    summary: sentences.slice(0, 2).join(' ').trim() || a.description?.slice(0, 200) || '',
+    whyMatters: sentences.slice(2, 4).join(' ').trim(),
+    category: a.category,
+    tier: 2,
+    isBreaking: false,
+    sourceCount: 1,
+    source: a.source,
+    time: a.time,
+    sourceUrl: a.sourceUrl,
+  };
+}
+
+function formatRelativeTime(dateIso?: string | null): string {
+  if (!dateIso) return '';
+  const ts = new Date(dateIso).getTime();
+  if (!Number.isFinite(ts)) return '';
+  const diffMs = Date.now() - ts;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+// ── Category color map ──────────────────────────────────────────────────────
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Markets: '#3B82F6',
+  Business: '#10B981',
+  Technology: '#8B5CF6',
+  Politics: '#EF4444',
+  Sports: '#F59E0B',
+  Health: '#06B6D4',
+  Science: '#6366F1',
+  Entertainment: '#EC4899',
+  World: '#14B8A6',
+  Property: '#F97316',
+  Employment: '#84CC16',
+  Lifestyle: '#D946EF',
+};
+
+const TIER_LABELS: Record<number, string> = {
+  1: 'DEEP DIVE',
+  2: 'STANDARD',
+  3: 'BRIEF',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const HomeScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
-  const [activeExplainerId, setActiveExplainerId] = useState<string | null>(null);
-  const [detailArticle, setDetailArticle] = useState<UiArticle | null>(null);
   const { toggleSave: handleSave, isSaved } = useSavedArticles();
   const { colors } = useTheme();
   const lastTapRef = React.useRef<{ [key: string]: number }>({});
-  const listRef = React.useRef<FlatList<UiArticle>>(null);
+  const listRef = React.useRef<FlatList<CardItem>>(null);
 
-  // Measure the available height for a single "page" so content isn't hidden behind the bottom tab bar.
   const [pageHeight, setPageHeight] = useState(0);
-  const imageHeight = Math.round(pageHeight * 0.35);
+  const imageHeight = Math.round(pageHeight * 0.32);
 
-  const [articles, setArticles] = useState<UiArticle[]>([]);
+  const [cards, setCards] = useState<CardItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
 
-  const loadFromApi = async (refresh: boolean) => {
-    setIsLoading(!refresh);
-    setIsRefreshing(refresh);
+  // Double-click detail state
+  const [detailStory, setDetailStory] = useState<FeedStoryDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailVisible, setDetailVisible] = useState(false);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const loadFeed = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const nextPage = refresh ? 1 : page;
+      // Try published feed first
+      const feedRes = await getLatestFeed();
+      if (feedRes.stories && feedRes.stories.length > 0) {
+        let items = feedRes.stories.map(feedStoryToCard);
+        if (selectedCategory !== 'All') {
+          items = items.filter((c) => c.category === selectedCategory);
+        }
+        setCards(items);
+        return;
+      }
+    } catch {
+      // Feed not available yet — fall back to articles
+    }
+
+    // Fallback: raw articles
+    try {
       const res = await listArticles({
-        page: nextPage,
-        limit: APP_CONFIG.NEWS_PER_PAGE,
+        page: 1,
+        limit: 50,
         category: selectedCategory === 'All' ? undefined : selectedCategory,
       });
-      const mapped = res.articles.map(mapArticleToUi);
-      setArticles(prev => (refresh ? mapped : [...prev, ...mapped]));
-      setPage(nextPage + 1);
-      setHasMore(res.pagination.page < res.pagination.totalPages);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      setCards(res.articles.map(mapArticleToUi).map(articleToCard));
+    } catch {
+      setCards([]);
     }
+  }, [selectedCategory]);
+
+  const refresh = async () => {
+    setIsRefreshing(true);
+    await loadFeed();
+    setIsRefreshing(false);
   };
 
   useEffect(() => {
     setCurrentIndex(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    void loadFromApi(true);
-  }, [selectedCategory]);
+    loadFeed().finally(() => setIsLoading(false));
+  }, [loadFeed]);
 
-  const onRefresh = async () => {
-    setIsRefreshing(true);
-    await loadFromApi(true);
+  // ── Interactions ──────────────────────────────────────────────────────────
+
+  const handleLike = (id: string) => {
+    setLikedArticles((prev) => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  };
+
+  const openDoubleClick = async (item: CardItem) => {
+    if (item.publishedStoryId) {
+      setDetailLoading(true);
+      setDetailVisible(true);
+      try {
+        const res = await getStoryDetail(item.publishedStoryId);
+        setDetailStory(res.story);
+      } catch {
+        setDetailStory(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    } else {
+      // No published story — show what we have in a simple modal
+      setDetailStory({
+        id: item.id,
+        headline: item.headline,
+        summary: item.summary,
+        whyMatters: item.whyMatters,
+        doubleClick: item.summary + (item.whyMatters ? `\n\n${item.whyMatters}` : ''),
+        category: item.category,
+        tier: item.tier,
+        feedRank: null,
+        illustrationId: null,
+        isBreaking: item.isBreaking,
+        edition: 'morning',
+        publishedAt: new Date().toISOString(),
+      });
+      setDetailVisible(true);
+    }
+  };
+
+  const handleDoubleTap = (item: CardItem) => {
+    const now = Date.now();
+    const last = lastTapRef.current[item.id] || 0;
+    if (now - last < 300) {
+      void openDoubleClick(item);
+    }
+    lastTapRef.current[item.id] = now;
   };
 
   const onViewableItemsChanged = React.useRef(({ viewableItems }: any) => {
@@ -95,153 +251,210 @@ export const HomeScreen: React.FC = () => {
     itemVisiblePercentThreshold: 50,
   }).current;
 
-  const handleLike = (articleId: string) => {
-    setLikedArticles(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(articleId)) {
-        newSet.delete(articleId);
-      } else {
-        newSet.add(articleId);
-      }
-      return newSet;
-    });
-  };
+  // ── Card renderer ─────────────────────────────────────────────────────────
 
-  const handleDoubleTap = (articleId: string) => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    const lastTap = lastTapRef.current[articleId] || 0;
-
-    if (now - lastTap < DOUBLE_TAP_DELAY) {
-      // Double tap detected - pop up the AI explainer!
-      setActiveExplainerId(articleId);
-    }
-    lastTapRef.current[articleId] = now;
-  };
-
-  const renderNewsItem = ({ item }: { item: UiArticle }) => {
+  const renderCard = ({ item }: { item: CardItem }) => {
     const isLiked = likedArticles.has(item.id);
-    const articleIsSaved = isSaved(item.id);
-    const likeCount = item.likeCount ?? 0;
-
-    // Derive a short key-takeaway from the first 1-2 sentences of the description.
-    const fullText = (item.description || '').trim();
-    const sentences = fullText.match(/[^.!?]+[.!?]+/g) || [];
-    const keyTakeaway = sentences.slice(0, 2).join(' ').trim() || fullText.slice(0, 120);
-    const bodyText = sentences.slice(2, 8).join(' ').trim() || fullText.slice(keyTakeaway.length).trim();
-
-    // Build sources label: source name + "· time"
-    const sourcesLabel = [item.source, item.time].filter(Boolean).join('  ·  ');
-
-    // Category colour map
-    const categoryColors: Record<string, string> = {
-      Markets: '#3B82F6',
-      Business: '#10B981',
-      Technology: '#8B5CF6',
-      Politics: '#EF4444',
-      Sports: '#F59E0B',
-      Health: '#06B6D4',
-      Science: '#6366F1',
-      Entertainment: '#EC4899',
-      World: '#14B8A6',
-    };
-    const catColor = categoryColors[item.category] ?? '#3B82F6';
+    const saved = isSaved(item.id);
+    const catColor = CATEGORY_COLORS[item.category] ?? '#3B82F6';
+    const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
     return (
-      <View style={[styles.newsItem, { height: pageHeight }]}>
-        {/* ── IMAGE AREA ── */}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => handleDoubleTap(item)}
+        style={[styles.newsItem, { height: pageHeight }]}
+      >
+        {/* ── ILLUSTRATION ── */}
         <View style={[styles.imageContainer, { height: imageHeight }]}>
-          <Image source={SAMPLE_ILLUSTRATION} style={styles.newsImage} />
-          {/* Dark gradient over the image for readability */}
+          <PlaceholderIllustration width={width} height={imageHeight} category={item.category} />
           <LinearGradient
-            colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0.55)']}
+            colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={StyleSheet.absoluteFillObject}
           />
 
-          {/* BREAKING badge – top left */}
-          <View style={[styles.breakingBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.breakingText, { color: colors.text }]}>BREAKING</Text>
+          {/* Breaking badge */}
+          {item.isBreaking && (
+            <View style={styles.breakingBadge}>
+              <Text style={styles.breakingText}>BREAKING</Text>
+            </View>
+          )}
+
+          {/* Tier badge — top right */}
+          <View style={[styles.tierBadge, { backgroundColor: catColor }]}>
+            <Text style={styles.tierText}>{tierLabel}</Text>
           </View>
 
+          {/* Source count — bottom of image */}
+          {item.sourceCount > 1 && (
+            <View style={styles.sourceCountBadge}>
+              <Ionicons name="layers-outline" size={12} color="#fff" />
+              <Text style={styles.sourceCountText}>{item.sourceCount} sources</Text>
+            </View>
+          )}
         </View>
 
-        {/* ── CONTENT AREA ── */}
-        <View style={[styles.contentCard, { backgroundColor: colors.surface }]}>
-          {/* Category pill + sources/time */}
+        {/* ── CONTENT ── */}
+        <View style={[styles.contentCard, { backgroundColor: colors.surface, flex: 1 }]}>
+          {/* Category pill + time */}
           <View style={styles.metaRow}>
-            <View style={[styles.categoryPill, { borderColor: catColor }]}>
+            <View style={[styles.categoryPill, { backgroundColor: catColor + '18', borderColor: catColor }]}>
               <Text style={[styles.categoryPillText, { color: catColor }]}>
                 {item.category.toUpperCase()}
               </Text>
             </View>
-            <View style={styles.likeRow}>
-              <Ionicons name="newspaper-outline" size={12} color={colors.textTertiary} />
-              <Text style={[styles.sourcesCount, { color: colors.textTertiary }]}>{sourcesLabel}</Text>
-            </View>
+            <Text style={[styles.timeText, { color: colors.textTertiary }]}>
+              {item.time}
+            </Text>
           </View>
 
-          {/* Title */}
-          <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={3}>
-            {item.title}
+          {/* Headline */}
+          <Text style={[styles.headline, { color: colors.text }]} numberOfLines={3}>
+            {item.headline}
           </Text>
 
-          {/* Key takeaway */}
-          {keyTakeaway.length > 0 && (
-            <View style={styles.takeawayBlock}>
-              <Text style={[styles.takeawayText, { color: colors.textSecondary }]} numberOfLines={3}>
-                {keyTakeaway}
+          {/* Summary */}
+          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={4}>
+            {item.summary}
+          </Text>
+
+          {/* Why it matters */}
+          {item.whyMatters.length > 0 && (
+            <View style={[styles.whyMattersBlock, { borderLeftColor: catColor }]}>
+              <Text style={[styles.whyMattersLabel, { color: catColor }]}>WHY IT MATTERS</Text>
+              <Text style={[styles.whyMattersText, { color: colors.textSecondary }]} numberOfLines={3}>
+                {item.whyMatters}
               </Text>
             </View>
           )}
 
-          {/* Body text */}
-          {bodyText.length > 0 && (
-            <Text style={[styles.bodyText, { color: colors.textSecondary }]} numberOfLines={10}>
-              {bodyText}
-            </Text>
-          )}
-
-          {/* Icons row — right after description */}
+          {/* Bottom actions */}
           <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
             <TouchableOpacity
-              style={[styles.viewMoreBtn, { backgroundColor: colors.backgroundTertiary }]}
-              onPress={() => setDetailArticle(item)}
+              style={[styles.viewMoreBtn, { backgroundColor: catColor + '20' }]}
+              onPress={() => void openDoubleClick(item)}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={16} color={colors.text} />
-              <Text style={[styles.viewMoreText, { color: colors.text }]}>View more</Text>
+              <Ionicons name="layers-outline" size={14} color={catColor} />
+              <Text style={[styles.viewMoreText, { color: catColor }]}>Read More</Text>
             </TouchableOpacity>
 
             <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleLike(item.id)} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.id)} activeOpacity={0.7}>
                 <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textTertiary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.id)} activeOpacity={0.7}>
-                <Ionicons name={articleIsSaved ? 'bookmark' : 'bookmark-outline'} size={20} color={articleIsSaved ? catColor : colors.textTertiary} />
+                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? catColor : colors.textTertiary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.sourceUrl })} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.headline })} activeOpacity={0.7}>
                 <Ionicons name="share-outline" size={20} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
           </View>
-
-          <Text style={[styles.sourceFooter, { color: colors.textTertiary }]} numberOfLines={1}>
-            {item.source}
-          </Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
+  // ── Double Click detail modal ─────────────────────────────────────────────
+
+  const renderDetailModal = () => {
+    if (!detailVisible) return null;
+
+    const story = detailStory;
+    const catColor = story ? (CATEGORY_COLORS[story.category] ?? '#3B82F6') : '#3B82F6';
+
+    return (
+      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailVisible(false)}>
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <SafeAreaView edges={['top']}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={() => setDetailVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="chevron-down" size={28} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Double Click</Text>
+              <View style={{ width: 28 }} />
+            </View>
+          </SafeAreaView>
+
+          {detailLoading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          ) : story ? (
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+              {/* Category + Tier */}
+              <View style={styles.metaRow}>
+                <View style={[styles.categoryPill, { backgroundColor: catColor + '18', borderColor: catColor }]}>
+                  <Text style={[styles.categoryPillText, { color: catColor }]}>{story.category.toUpperCase()}</Text>
+                </View>
+                <View style={[styles.tierPillModal, { backgroundColor: colors.backgroundTertiary }]}>
+                  <Text style={[styles.tierPillText, { color: colors.textSecondary }]}>
+                    {TIER_LABELS[story.tier] ?? 'STANDARD'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Headline */}
+              <Text style={[styles.modalHeadline, { color: colors.text }]}>{story.headline}</Text>
+
+              {/* Summary */}
+              <Text style={[styles.modalSummary, { color: colors.textSecondary }]}>{story.summary}</Text>
+
+              {/* Why it matters */}
+              {story.whyMatters && story.whyMatters.length > 0 && (
+                <View style={[styles.whyMattersBlock, { borderLeftColor: catColor }]}>
+                  <Text style={[styles.whyMattersLabel, { color: catColor }]}>WHY IT MATTERS</Text>
+                  <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>{story.whyMatters}</Text>
+                </View>
+              )}
+
+              {/* Double Click content */}
+              <View style={[styles.doubleClickSection, { backgroundColor: colors.surfaceSecondary ?? colors.surface }]}>
+                <View style={styles.doubleClickHeader}>
+                  <Ionicons name="layers" size={18} color={catColor} />
+                  <Text style={[styles.doubleClickTitle, { color: colors.text }]}>The Full Story</Text>
+                </View>
+                <Text style={[styles.modalBodyText, { color: colors.text }]}>{story.doubleClick}</Text>
+              </View>
+
+              {/* Sources list */}
+              {story.cluster?.articles && story.cluster.articles.length > 0 && (
+                <View style={styles.sourcesSection}>
+                  <Text style={[styles.sourcesTitle, { color: colors.textTertiary }]}>
+                    SOURCES ({story.cluster.articles.length})
+                  </Text>
+                  {story.cluster.articles.map((art) => (
+                    <View key={art.id} style={[styles.sourceItem, { borderBottomColor: colors.border }]}>
+                      <Text style={[styles.sourceItemTitle, { color: colors.text }]} numberOfLines={2}>
+                        {art.title}
+                      </Text>
+                      <Text style={[styles.sourceItemMeta, { color: colors.textTertiary }]}>
+                        {art.source}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          ) : (
+            <View style={styles.loading}>
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Could not load story details.</Text>
+            </View>
+          )}
+        </View>
+      </Modal>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────────
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top category tabs (Inshorts-style) */}
+      {/* Category tabs */}
       <SafeAreaView edges={['top']} style={[styles.tabsBar, { backgroundColor: colors.surface }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsContent}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
           {CATEGORIES.map((category) => {
             const active = selectedCategory === category;
             return (
@@ -255,24 +468,17 @@ export const HomeScreen: React.FC = () => {
                   listRef.current?.scrollToOffset({ offset: 0, animated: false });
                 }}
               >
-                <Text
-                  style={[
-                    styles.tabText,
-                    { color: active ? colors.accent : colors.textTertiary },
-                  ]}
-                >
+                <Text style={[styles.tabText, { color: active ? colors.accent : colors.textTertiary }]}>
                   {category === 'All' ? 'My Feed' : category}
                 </Text>
-                {active ? (
-                  <View style={[styles.tabUnderline, { backgroundColor: colors.accent }]} />
-                ) : null}
+                {active && <View style={[styles.tabUnderline, { backgroundColor: colors.accent }]} />}
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </SafeAreaView>
 
-      {/* Full-Screen Vertical Scroll (measured so bottom tab bar doesn't cover content) */}
+      {/* Card list */}
       <View
         style={styles.listArea}
         onLayout={(e) => {
@@ -280,16 +486,16 @@ export const HomeScreen: React.FC = () => {
           if (h > 0) setPageHeight(h);
         }}
       >
-        {pageHeight === 0 || (isLoading && articles.length === 0) ? (
+        {pageHeight === 0 || (isLoading && cards.length === 0) ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading news...</Text>
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading feed...</Text>
           </View>
         ) : (
           <FlatList
             ref={listRef}
-            data={articles}
-            renderItem={renderNewsItem}
+            data={cards}
+            renderItem={renderCard}
             keyExtractor={(item, index) => `${item.id}-${index}`}
             pagingEnabled
             showsVerticalScrollIndicator={false}
@@ -298,26 +504,17 @@ export const HomeScreen: React.FC = () => {
             decelerationRate="fast"
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
-            getItemLayout={(data, index) => ({
+            getItemLayout={(_data, index) => ({
               length: pageHeight,
               offset: pageHeight * index,
               index,
             })}
-            onEndReached={() => {
-              if (!isLoading && hasMore) {
-                void loadFromApi(false);
-              }
-            }}
-            onEndReachedThreshold={0.5}
             refreshing={isRefreshing}
-            onRefresh={onRefresh}
+            onRefresh={refresh}
             ListEmptyComponent={
               <View style={styles.loading}>
-                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>No articles found.</Text>
-                <TouchableOpacity
-                  onPress={() => void onRefresh()}
-                  style={[styles.retryButton, { borderColor: colors.border }]}
-                >
+                <Text style={[styles.loadingText, { color: colors.textSecondary }]}>No stories yet.</Text>
+                <TouchableOpacity onPress={() => void refresh()} style={[styles.retryButton, { borderColor: colors.border }]}>
                   <Text style={[styles.retryText, { color: colors.text }]}>Retry</Text>
                 </TouchableOpacity>
               </View>
@@ -325,235 +522,109 @@ export const HomeScreen: React.FC = () => {
           />
         )}
       </View>
-      
-      {/* Global Explainer Overlay */}
-      {activeExplainerId && (
-        <View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 9999 }]}>
-          <ExplainerView
-            articleId={activeExplainerId}
-            onClose={() => setActiveExplainerId(null)}
-          />
-        </View>
-      )}
 
-      {detailArticle && (
-        <NewsDetailModal
-          visible={true}
-          article={{
-            id: detailArticle.id,
-            title: detailArticle.title,
-            description: detailArticle.body || detailArticle.title,
-            imageUrl: detailArticle.imageUrl || '',
-            source: detailArticle.source,
-            category: detailArticle.category,
-            sourceUrl: detailArticle.sourceUrl,
-          }}
-          onClose={() => setDetailArticle(null)}
-        />
-      )}
+      {/* Double Click modal */}
+      {renderDetailModal()}
     </View>
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  // ── Screen chrome ──────────────────────────────────────────────────────────
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0f',
-  },
-  tabsBar: {
-    backgroundColor: 'rgba(0,0,0,0.92)',
-  },
-  tabsContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 18,
-    alignItems: 'center',
-  },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  tabUnderline: {
-    marginTop: 6,
-    height: 3,
-    width: 26,
-    borderRadius: 3,
-  },
-  listArea: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  tabsBar: {},
+  tabsContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 18, alignItems: 'center' },
+  tabItem: { alignItems: 'center', justifyContent: 'center' },
+  tabText: { fontSize: 15, fontWeight: '700' },
+  tabUnderline: { marginTop: 6, height: 3, width: 26, borderRadius: 3 },
+  listArea: { flex: 1 },
 
-  // ── Card shell ─────────────────────────────────────────────────────────────
-  newsItem: {
-    width,
-  },
+  // Card
+  newsItem: { width },
+  imageContainer: { width: '100%', overflow: 'hidden' },
 
-  // ── Image area ─────────────────────────────────────────────────────────────
-  imageContainer: {
-    width: '100%',
-    overflow: 'hidden',
-  },
-  newsImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-
-  // BREAKING badge
+  // Breaking
   breakingBadge: {
-    position: 'absolute',
-    top: 18,
-    left: 18,
-    backgroundColor: '#0a0a0f',
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    zIndex: 10,
+    position: 'absolute', top: 14, left: 14,
+    backgroundColor: '#EF4444', borderRadius: 4,
+    paddingHorizontal: 10, paddingVertical: 4,
   },
-  breakingText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
+  breakingText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
 
-  // ── Content card ───────────────────────────────────────────────────────────
-  contentCard: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 10,
+  // Tier
+  tierBadge: {
+    position: 'absolute', top: 14, right: 14,
+    borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4,
   },
+  tierText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
 
-  // Category pill + sources row
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 10,
+  // Source count
+  sourceCountBadge: {
+    position: 'absolute', bottom: 10, left: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  categoryPill: {
-    borderWidth: 1.5,
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  categoryPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  likeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sourcesCount: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '500',
-  },
+  sourceCountText: { color: '#fff', fontSize: 11, fontWeight: '600' },
 
-  // Title
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#f0f0f5',
-    lineHeight: 25,
-    marginBottom: 10,
-  },
+  // Content
+  contentCard: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 10 },
+  categoryPill: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  categoryPillText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
+  timeText: { fontSize: 12, fontWeight: '500' },
 
-  // Key takeaway block (blue left border)
-  takeawayBlock: {
-    borderLeftWidth: 3,
-    borderLeftColor: '#3B82F6',
-    paddingLeft: 10,
-    marginBottom: 10,
-  },
-  takeawayText: {
-    fontSize: 13.5,
-    fontStyle: 'italic',
-    color: '#b0b8cc',
-    lineHeight: 20,
-  },
+  headline: { fontSize: 19, fontWeight: '800', lineHeight: 26, marginBottom: 8 },
+  summary: { fontSize: 14, lineHeight: 21, marginBottom: 10 },
 
-  // Body
-  bodyText: {
-    fontSize: 14,
-    color: '#9a9aaa',
-    lineHeight: 21,
-    marginBottom: 10,
-  },
+  whyMattersBlock: { borderLeftWidth: 3, paddingLeft: 12, marginBottom: 10, paddingVertical: 4 },
+  whyMattersLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
+  whyMattersText: { fontSize: 13, lineHeight: 19 },
 
-  // ── Bottom row ─────────────────────────────────────────────────────────────
+  // Bottom row
   bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: 10, borderTopWidth: 1,
   },
   viewMoreBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
   },
-  viewMoreText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#f0f0f5',
-  },
-  bottomActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconBtn: {
-    padding: 4,
-  },
+  viewMoreText: { fontSize: 13, fontWeight: '700' },
+  bottomActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBtn: { padding: 4 },
 
-  // Sources footer
-  sourceFooter: {
-    fontSize: 11,
-    color: '#555',
-    marginTop: 6,
-    textAlign: 'right',
-    fontWeight: '500',
-    letterSpacing: 0.5,
-  },
+  // Loading
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  loadingText: { marginTop: 12, fontSize: 14 },
+  retryButton: { marginTop: 12, borderWidth: 1, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 },
+  retryText: { fontWeight: '700' },
 
-  // ── Loading / empty states ──────────────────────────────────────────────────
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+  // ── Double Click Modal ──────────────────────────────────────────────────
+  modalContainer: { flex: 1 },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
-  retryButton: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  retryText: {
-    fontWeight: '700',
-  },
+  modalCloseBtn: { padding: 4 },
+  modalHeaderTitle: { fontSize: 17, fontWeight: '700' },
+  modalScroll: { flex: 1 },
+  modalScrollContent: { padding: 20 },
+  modalHeadline: { fontSize: 22, fontWeight: '800', lineHeight: 30, marginBottom: 12 },
+  modalSummary: { fontSize: 15, lineHeight: 23, marginBottom: 16 },
+  modalBodyText: { fontSize: 15, lineHeight: 24 },
+
+  doubleClickSection: { borderRadius: 12, padding: 16, marginTop: 16, marginBottom: 16 },
+  doubleClickHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  doubleClickTitle: { fontSize: 16, fontWeight: '700' },
+
+  sourcesSection: { marginTop: 8 },
+  sourcesTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginBottom: 8 },
+  sourceItem: { paddingVertical: 10, borderBottomWidth: 1 },
+  sourceItemTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  sourceItemMeta: { fontSize: 12 },
+
+  tierPillModal: { borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 },
+  tierPillText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
 });
-

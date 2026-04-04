@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   NotFoundException,
@@ -64,6 +65,15 @@ export class FeedController {
       count: stories.length,
       stories,
     };
+  }
+
+  @Post('build')
+  @ApiOperation({ summary: 'Manually trigger feed build for an edition' })
+  @ApiQuery({ name: 'edition', required: false, type: String })
+  async buildFeed(@Query('edition') edition?: string) {
+    const ed = (edition === 'evening' ? 'evening' : 'morning') as 'morning' | 'evening';
+    const result = await this.feedService.buildFeed(ed, new Date());
+    return { success: true, edition: ed, shortlisted: result.length };
   }
 
   @Get('story/:id')
