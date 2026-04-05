@@ -100,7 +100,9 @@ function formatRelativeTime(dateIso?: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// ── Tier labels ─────────────────────────────────────────────────────────────const TIER_LABELS: Record<number, string> = {
+// ── Tier labels ─────────────────────────────────────────────────────────────
+
+const TIER_LABELS: Record<number, string> = {
   1: 'DEEP DIVE',
   2: 'STANDARD',
   3: 'BRIEF',
