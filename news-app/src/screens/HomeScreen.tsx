@@ -100,24 +100,7 @@ function formatRelativeTime(dateIso?: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-// ── Category color map ──────────────────────────────────────────────────────
-
-const CATEGORY_COLORS: Record<string, string> = {
-  Markets: '#3B82F6',
-  Business: '#10B981',
-  Technology: '#8B5CF6',
-  Politics: '#EF4444',
-  Sports: '#F59E0B',
-  Health: '#06B6D4',
-  Science: '#6366F1',
-  Entertainment: '#EC4899',
-  World: '#14B8A6',
-  Property: '#F97316',
-  Employment: '#84CC16',
-  Lifestyle: '#D946EF',
-};
-
-const TIER_LABELS: Record<number, string> = {
+// ── Tier labels ─────────────────────────────────────────────────────────────const TIER_LABELS: Record<number, string> = {
   1: 'DEEP DIVE',
   2: 'STANDARD',
   3: 'BRIEF',
@@ -256,7 +239,6 @@ export const HomeScreen: React.FC = () => {
   const renderCard = ({ item }: { item: CardItem }) => {
     const isLiked = likedArticles.has(item.id);
     const saved = isSaved(item.id);
-    const catColor = CATEGORY_COLORS[item.category] ?? '#3B82F6';
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
     return (
@@ -281,7 +263,7 @@ export const HomeScreen: React.FC = () => {
           )}
 
           {/* Tier badge — top right */}
-          <View style={[styles.tierBadge, { backgroundColor: catColor }]}>
+          <View style={[styles.tierBadge, { backgroundColor: colors.accent }]}>
             <Text style={styles.tierText}>{tierLabel}</Text>
           </View>
 
@@ -298,8 +280,8 @@ export const HomeScreen: React.FC = () => {
         <View style={[styles.contentCard, { backgroundColor: colors.surface, flex: 1 }]}>
           {/* Category pill + time */}
           <View style={styles.metaRow}>
-            <View style={[styles.categoryPill, { backgroundColor: catColor + '18', borderColor: catColor }]}>
-              <Text style={[styles.categoryPillText, { color: catColor }]}>
+            <View style={[styles.categoryPill, { backgroundColor: colors.accent + '18', borderColor: colors.accent }]}>
+              <Text style={[styles.categoryPillText, { color: colors.accent }]}>
                 {item.category.toUpperCase()}
               </Text>
             </View>
@@ -320,8 +302,8 @@ export const HomeScreen: React.FC = () => {
 
           {/* Why it matters */}
           {item.whyMatters.length > 0 && (
-            <View style={[styles.whyMattersBlock, { borderLeftColor: catColor }]}>
-              <Text style={[styles.whyMattersLabel, { color: catColor }]}>WHY IT MATTERS</Text>
+            <View style={[styles.whyMattersBlock, { borderLeftColor: colors.accent }]}>
+              <Text style={[styles.whyMattersLabel, { color: colors.accent }]}>WHY IT MATTERS</Text>
               <Text style={[styles.whyMattersText, { color: colors.textSecondary }]} numberOfLines={3}>
                 {item.whyMatters}
               </Text>
@@ -331,12 +313,12 @@ export const HomeScreen: React.FC = () => {
           {/* Bottom actions */}
           <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
             <TouchableOpacity
-              style={[styles.viewMoreBtn, { backgroundColor: catColor + '20' }]}
+              style={[styles.viewMoreBtn, { backgroundColor: colors.accent + '20' }]}
               onPress={() => void openDoubleClick(item)}
               activeOpacity={0.8}
             >
-              <Ionicons name="layers-outline" size={14} color={catColor} />
-              <Text style={[styles.viewMoreText, { color: catColor }]}>Read More</Text>
+              <Ionicons name="layers-outline" size={14} color={colors.accent} />
+              <Text style={[styles.viewMoreText, { color: colors.accent }]}>Read More</Text>
             </TouchableOpacity>
 
             <View style={styles.bottomActions}>
@@ -344,7 +326,7 @@ export const HomeScreen: React.FC = () => {
                 <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textTertiary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.id)} activeOpacity={0.7}>
-                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? catColor : colors.textTertiary} />
+                <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? colors.accent : colors.textTertiary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.headline })} activeOpacity={0.7}>
                 <Ionicons name="share-outline" size={20} color={colors.textTertiary} />
@@ -362,7 +344,7 @@ export const HomeScreen: React.FC = () => {
     if (!detailVisible) return null;
 
     const story = detailStory;
-    const catColor = story ? (CATEGORY_COLORS[story.category] ?? '#3B82F6') : '#3B82F6';
+    const catColor = colors.accent;
 
     return (
       <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailVisible(false)}>
