@@ -273,28 +273,6 @@ const styles = StyleSheet.create({
   },
 });
 
-          {/* Terms */}
-          <Text style={[styles.terms, { color: theme.colors.textSecondary }]}>
-            By signing up, you agree to our{' '}
-            <Text style={{ color: theme.colors.accent }}>Terms of Service</Text> and{' '}
-            <Text style={{ color: theme.colors.accent }}>Privacy Policy</Text>
-          </Text>
-
-          {/* Sign In Link */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: theme.colors.textSecondary }]}>
-              Already have an account?{' '}
-            </Text>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={[styles.loginLink, { color: theme.colors.accent }]}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-};
-
 const createStyles = (theme: any) =>
   StyleSheet.create({
     container: {

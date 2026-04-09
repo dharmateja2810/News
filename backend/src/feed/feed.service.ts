@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { OzscoreService } from '../ozscore/ozscore.service';
 
 /** Category slot allocation: min / max in top-50 */
 const CATEGORY_SLOTS: Record<string, { min: number; max: number }> = {
@@ -38,7 +37,6 @@ export class FeedService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly ozscoreService: OzscoreService,
   ) {}
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -50,8 +48,6 @@ export class FeedService {
   async freezeMorningFeed(): Promise<void> {
     this.logger.log('Cron: freezing morning feed');
     try {
-      // Score all active clusters first
-      await this.ozscoreService.scoreAllActive();
       await this.buildFeed('morning', new Date());
       this.logger.log('Morning feed frozen successfully');
     } catch (error) {
@@ -64,7 +60,6 @@ export class FeedService {
   async freezeEveningFeed(): Promise<void> {
     this.logger.log('Cron: freezing evening feed');
     try {
-      await this.ozscoreService.scoreAllActive();
       await this.buildFeed('evening', new Date());
       this.logger.log('Evening feed frozen successfully');
     } catch (error) {

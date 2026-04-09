@@ -5,11 +5,6 @@ import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { ExplainerModule } from './explainer/explainer.module';
-import { ScraperModule } from './scraper/scraper.module';
-import { NormaliserModule } from './normaliser/normaliser.module';
-import { DedupModule } from './dedup/dedup.module';
-import { ClusteringModule } from './clustering/clustering.module';
-import { OzscoreModule } from './ozscore/ozscore.module';
 import { FeedModule } from './feed/feed.module';
 import { EditorModule } from './editor/editor.module';
 import { PublisherModule } from './publisher/publisher.module';
@@ -30,11 +25,6 @@ import { HealthController } from './health/health.controller';
     ArticlesModule,
     BookmarksModule,
     ExplainerModule,
-    ScraperModule,
-    NormaliserModule,
-    DedupModule,
-    ClusteringModule,
-    OzscoreModule,
     FeedModule,
     EditorModule,
     PublisherModule,
