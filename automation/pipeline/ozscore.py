@@ -310,14 +310,32 @@ def score_all_active() -> int:
 
     logger.info("Scoring %d active cluster(s)", len(cluster_ids))
     scored = 0
+    failed = []
+    
     for cid in cluster_ids:
-        try:
-            score_cluster(cid)
-            scored += 1
-        except Exception as exc:
-            logger.error("Failed to score cluster %s: %s", cid, exc)
+        retries = 0
+        max_retries = 2
+        while retries <= max_retries:
+            try:
+                score_cluster(cid)
+                scored += 1
+                break
+            except Exception as exc:
+                retries += 1
+                if retries <= max_retries:
+                    logger.warning(
+                        "Failed to score cluster %s (attempt %d/%d): %s. Retrying...",
+                        cid, retries, max_retries + 1, str(exc)[:100]
+                    )
+                    import time
+                    time.sleep(1.0 * retries)  # Exponential backoff
+                else:
+                    logger.error("Failed to score cluster %s after %d attempts: %s", cid, max_retries + 1, str(exc)[:100])
+                    failed.append((cid, str(exc)[:200]))
 
-    logger.info("Scoring complete: %d/%d scored", scored, len(cluster_ids))
+    logger.info("Scoring complete: %d/%d scored, %d failed", scored, len(cluster_ids), len(failed))
+    if failed:
+        logger.warning("Failed clusters: %s", failed[:5])  # Log first 5 failures
     return scored
 
 
