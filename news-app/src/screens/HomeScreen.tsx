@@ -74,12 +74,18 @@ function feedStoryToCard(s: FeedStory): CardItem {
 /** Map a raw UiArticle (fallback) to CardItem */
 function articleToCard(a: UiArticle): CardItem {
   const sentences = (a.description || '').match(/[^.!?]+[.!?]+/g) || [];
+  const summary = sentences.slice(0, 3).join(' ').trim() || a.description?.slice(0, 300) || '';
+  const whyMatters = sentences.slice(3, 6).join(' ').trim();
+  // Use up to ~800 chars of the article body as the "doubleClick" body for non-whyMatters display
+  const doubleClick = sentences.length > 6
+    ? sentences.slice(0, 15).join(' ').trim()
+    : a.description?.slice(0, 800) || '';
   return {
     id: a.id,
     headline: a.title,
-    summary: sentences.slice(0, 2).join(' ').trim() || a.description?.slice(0, 200) || '',
-    whyMatters: sentences.slice(2, 4).join(' ').trim(),
-    doubleClick: '',
+    summary,
+    whyMatters,
+    doubleClick,
     category: a.category,
     tier: 2,
     isBreaking: false,

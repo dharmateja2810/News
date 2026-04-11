@@ -1,9 +1,11 @@
 """
 Python RSS scraper — replaces backend/src/scraper/scraper.service.ts
 Reads active sources from the DB, fetches their RSS feeds via feedparser,
-applies AU relevance filtering, and writes new articles directly to PostgreSQL.
+applies AU relevance filtering, fetches full article content, generates
+AI summaries via OpenAI GPT-4o, and writes articles to PostgreSQL.
 """
 
+import os
 import re
 import ssl
 import uuid
@@ -13,12 +15,43 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import feedparser
+import requests
+from bs4 import BeautifulSoup
 
 # macOS Python often lacks system CA certificates; disable SSL verification
 # for this local pipeline tool that only fetches known news RSS URLs.
 ssl._create_default_https_context = ssl._create_unverified_context
 
 from db import get_connection, dict_cursor
+
+# ── HTTP session for article fetching ────────────────────────────────────────
+
+_session = requests.Session()
+_session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120 Safari/537.36"
+    )
+})
+REQUEST_TIMEOUT = 30
+
+# ── OpenAI client (lazy-initialised) ────────────────────────────────────────
+
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is not None:
+        return _openai_client
+    from openai import OpenAI
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set. Add it to backend/config.env."
+        )
+    _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +103,53 @@ def _generate_dedup_hash(title: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", title.lower())).strip()[:80]
 
 
+MAX_CONTENT_WORKERS = 10  # parallel article fetches per source
+
+
+def _fetch_article_content(url: str) -> Optional[str]:
+    """Fetch the full article page and extract paragraph text."""
+    try:
+        res = _session.get(url, timeout=REQUEST_TIMEOUT)
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, "html.parser")
+        container = soup.find("article") or soup.find("main") or soup
+        paragraphs = [p.get_text(" ", strip=True) for p in container.find_all("p")]
+        paragraphs = [p for p in paragraphs if len(p) > 60]
+        return "\n\n".join(paragraphs[:15]) if paragraphs else None
+    except Exception as exc:
+        logger.debug("Failed to fetch article content from %s: %s", url, exc)
+        return None
+
+
+def _summarize_with_openai(title: str, content: str) -> str:
+    """Generate an 8-10 sentence summary using OpenAI GPT-4o."""
+    try:
+        client = _get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a news summariser for OzShorts, an Australian news service. "
+                        "Summarise the article in 8-10 sentences. Be neutral, factual, concise. "
+                        "Only output the summary, nothing else."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"TITLE: {title}\n\nCONTENT: {content}",
+                },
+            ],
+            temperature=0.3,
+            max_tokens=800,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as exc:
+        logger.error("OpenAI summarisation failed for '%s': %s", title[:60], exc)
+        return ""
+
+
 def _extract_image_url(entry: dict) -> Optional[str]:
     """Try known media fields on a feedparser entry."""
     media_content = entry.get("media_content", [])
@@ -109,7 +189,8 @@ def _parse_published(entry: dict) -> Optional[datetime]:
 
 def _scrape_source(source: dict) -> int:
     """
-    Fetch the RSS feed for one source, filter, and insert new articles.
+    Fetch the RSS feed for one source, filter, fetch full article content,
+    generate AI summaries, and insert new articles.
     Returns the count of newly inserted articles.
     """
     rss_url = source.get("rss_url")
@@ -128,63 +209,132 @@ def _scrape_source(source: dict) -> int:
         return 0
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-    inserted = 0
 
+    # ── Phase 1: filter entries and collect candidates ────────────────────
+    candidates = []
     conn = get_connection()
     try:
         for entry in feed.entries:
             try:
                 published_at = _parse_published(entry)
                 if published_at and published_at < cutoff:
-                    continue  # older than 48 h
+                    continue
 
                 source_url = (entry.get("link") or "").strip()
                 if not source_url:
                     continue
 
                 with dict_cursor(conn) as cur:
-                    # Duplicate check
                     cur.execute("SELECT id FROM articles WHERE url = %s", (source_url,))
                     if cur.fetchone():
                         continue
 
                 title = (entry.get("title") or "").strip()
-                summary = (
+                rss_summary = (
                     entry.get("summary")
                     or entry.get("description")
                     or entry.get("content", [{}])[0].get("value", "")
                     or ""
                 ).strip()
 
-                # AU relevance filter
-                if source.get("requires_au_filter") and not _passes_au_filter(title, summary):
+                if source.get("requires_au_filter") and not _passes_au_filter(title, rss_summary):
                     continue
 
-                dedup_hash = _generate_dedup_hash(title)
-                category = _derive_category(title, summary)
-                image_url = _extract_image_url(entry)
-                author = entry.get("author") or None
+                candidates.append({
+                    "entry": entry,
+                    "title": title,
+                    "rss_summary": rss_summary,
+                    "source_url": source_url,
+                    "published_at": published_at,
+                })
+            except Exception as exc:
+                logger.error(
+                    "Error filtering entry '%s' from '%s': %s",
+                    entry.get("title", ""),
+                    source["slug"],
+                    exc,
+                )
+    finally:
+        conn.close()
+
+    if not candidates:
+        logger.info("Source '%s': no new candidates", source["slug"])
+        return 0
+
+    # ── Phase 2: fetch full content in parallel ──────────────────────────
+    def _fetch_for_candidate(cand):
+        content = _fetch_article_content(cand["source_url"])
+        cand["full_content"] = content
+        return cand
+
+    with ThreadPoolExecutor(max_workers=MAX_CONTENT_WORKERS) as executor:
+        futures = [executor.submit(_fetch_for_candidate, c) for c in candidates]
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                logger.debug("Content fetch failed: %s", exc)
+
+    # ── Phase 3: generate summaries in parallel ──────────────────────────
+    def _summarize_candidate(cand):
+        text = cand.get("full_content") or cand["rss_summary"]
+        if text:
+            cand["ai_summary"] = _summarize_with_openai(cand["title"], text)
+        else:
+            cand["ai_summary"] = ""
+        return cand
+
+    with ThreadPoolExecutor(max_workers=MAX_CONTENT_WORKERS) as executor:
+        futures = [executor.submit(_summarize_candidate, c) for c in candidates]
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as exc:
+                logger.debug("Summary generation failed: %s", exc)
+
+    # ── Phase 4: insert into DB ──────────────────────────────────────────
+    inserted = 0
+    conn = get_connection()
+    try:
+        for cand in candidates:
+            try:
+                dedup_hash = _generate_dedup_hash(cand["title"])
+                category = _derive_category(cand["title"], cand["rss_summary"])
+                image_url = _extract_image_url(cand["entry"])
+                author = cand["entry"].get("author") or None
+
+                full_content = cand.get("full_content") or None
+                ai_summary = cand.get("ai_summary") or None
+                # body = full article text, content = AI summary or full text,
+                # summary = AI summary
+                body = full_content
+                content = ai_summary or full_content or cand["rss_summary"] or None
+                summary = ai_summary
 
                 now = datetime.now(timezone.utc)
                 with conn.cursor() as cur:
                     cur.execute(
                         """
                         INSERT INTO articles
-                          (id, title, description, url, source, category, author,
-                           published_at, image_url, source_authority, is_paywalled,
-                           dedup_hash, processed, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false, %s, %s)
+                          (id, title, description, content, body, summary, url,
+                           source, category, author, published_at, image_url,
+                           source_authority, is_paywalled, dedup_hash, processed,
+                           created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false, %s, %s)
                         ON CONFLICT (url) DO NOTHING
                         """,
                         (
                             str(uuid.uuid4()),
-                            title,
-                            summary or None,
-                            source_url,
+                            cand["title"],
+                            cand["rss_summary"] or None,
+                            content,
+                            body,
+                            summary,
+                            cand["source_url"],
                             source["name"],
                             category,
                             author,
-                            published_at,
+                            cand["published_at"],
                             image_url,
                             source.get("authority_score", 0.5),
                             bool(source.get("is_paywalled", False)),
@@ -200,8 +350,8 @@ def _scrape_source(source: dict) -> int:
             except Exception as exc:
                 conn.rollback()
                 logger.error(
-                    "Error processing entry '%s' from '%s': %s",
-                    entry.get("title", ""),
+                    "Error inserting '%s' from '%s': %s",
+                    cand["title"][:60],
                     source["slug"],
                     exc,
                 )
@@ -209,8 +359,8 @@ def _scrape_source(source: dict) -> int:
         conn.close()
 
     logger.info(
-        "Source '%s': %d new article(s) from %d entries",
-        source["slug"], inserted, len(feed.entries),
+        "Source '%s': %d new article(s) from %d entries (%d candidates)",
+        source["slug"], inserted, len(feed.entries), len(candidates),
     )
     return inserted
 
