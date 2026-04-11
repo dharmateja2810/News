@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ExplainerService } from '../explainer/explainer.service';
 
 @Injectable()
 export class EditorService {
@@ -8,7 +7,6 @@ export class EditorService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly explainerService: ExplainerService,
   ) {}
 
   /**
@@ -70,30 +68,6 @@ export class EditorService {
       data: {
         ...data,
         reviewedAt: data.status ? new Date() : undefined,
-      },
-    });
-  }
-
-  /**
-   * Trigger AI generation for a specific queue item's cluster.
-   * Populates aiHeadline, aiSummary, aiWhyMatters, aiDoubleClick.
-   */
-  async triggerAiGeneration(queueItemId: string) {
-    const item = await this.prisma.editorQueue.findUnique({
-      where: { id: queueItemId },
-      select: { clusterId: true },
-    });
-    if (!item) throw new Error(`Queue item ${queueItemId} not found`);
-
-    const result = await this.explainerService.generateForCluster(item.clusterId);
-
-    return this.prisma.editorQueue.update({
-      where: { id: queueItemId },
-      data: {
-        aiHeadline: result.headline,
-        aiSummary: result.cardSummary,
-        aiWhyMatters: result.whyItMatters,
-        aiDoubleClick: result.explainerBody,
       },
     });
   }

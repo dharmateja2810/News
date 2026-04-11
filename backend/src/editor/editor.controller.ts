@@ -2,11 +2,9 @@ import {
   Controller,
   Get,
   Patch,
-  Post,
   Param,
   Query,
   Body,
-  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { EditorService } from './editor.service';
@@ -42,15 +40,6 @@ export class EditorController {
     },
   ) {
     const item = await this.editorService.updateQueueItem(id, body);
-    return { success: true, item };
-  }
-
-  @Post('queue/:id/generate')
-  @ApiOperation({ summary: 'Trigger AI generation for a queue item' })
-  @ApiParam({ name: 'id' })
-  @HttpCode(200)
-  async triggerGeneration(@Param('id') id: string) {
-    const item = await this.editorService.triggerAiGeneration(id);
     return { success: true, item };
   }
 
