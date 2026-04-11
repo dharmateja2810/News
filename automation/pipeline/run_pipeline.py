@@ -2,16 +2,19 @@
 Pipeline orchestrator — runs all pipeline stages in sequence.
 
 Usage:
-  python run_pipeline.py              # full pipeline (scrape → normalise → dedup → cluster → score)
+  python run_pipeline.py              # full pipeline (scrape → normalise → dedup → cluster → score → explain)
   python run_pipeline.py --scrape     # only scrape
   python run_pipeline.py --normalise  # only normalise
   python run_pipeline.py --dedup      # only dedup
   python run_pipeline.py --cluster    # only cluster + archive
   python run_pipeline.py --score      # only score
+  python run_pipeline.py --explain    # only AI explainer (fills editor_queue ai_* fields)
+  python run_pipeline.py --breaking   # only breaking detector + auto-defer (run every 5 min)
 
-Cron examples (match NestJS schedule):
+Cron examples:
   */15 * * * * cd /path/to/pipeline && python run_pipeline.py --scrape --normalise
-  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score
+  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score --explain
+  */5  * * * * cd /path/to/pipeline && python run_pipeline.py --breaking
   0 */6 * * *  cd /path/to/pipeline && python run_pipeline.py   # full pass every 6h
 """
 
@@ -84,6 +87,27 @@ def run_score():
     return n
 
 
+def run_explain():
+    logger.info("=== STAGE 6: AI Explainer ===")
+    from explainer import generate_all_pending
+    t0 = time.time()
+    n = generate_all_pending()
+    logger.info("Explain complete in %.1fs — %d queue item(s) generated", time.time() - t0, n)
+    return n
+
+
+def run_breaking_stage():
+    logger.info("=== STAGE 7: Breaking Detector ===")
+    from breaking import run_breaking
+    t0 = time.time()
+    result = run_breaking()
+    logger.info(
+        "Breaking complete in %.1fs — created=%d deferred=%d",
+        time.time() - t0, result["breaking_created"], result["deferred"],
+    )
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="OzShorts pipeline runner")
     parser.add_argument("--scrape",    action="store_true", help="Run scrape stage")
@@ -91,10 +115,15 @@ def main():
     parser.add_argument("--dedup",     action="store_true", help="Run dedup stage")
     parser.add_argument("--cluster",   action="store_true", help="Run clustering stage")
     parser.add_argument("--score",     action="store_true", help="Run scoring stage")
+    parser.add_argument("--explain",   action="store_true", help="Run AI explainer stage")
+    parser.add_argument("--breaking",  action="store_true", help="Run breaking detector")
     args = parser.parse_args()
 
-    # If no specific stage flags → run all stages
-    run_all = not any([args.scrape, args.normalise, args.dedup, args.cluster, args.score])
+    # If no specific stage flags → run all stages (except breaking — that has its own cron)
+    run_all = not any([
+        args.scrape, args.normalise, args.dedup, args.cluster,
+        args.score, args.explain, args.breaking,
+    ])
 
     t_start = time.time()
     logger.info("Pipeline starting")
@@ -110,6 +139,10 @@ def main():
             run_cluster()
         if run_all or args.score:
             run_score()
+        if run_all or args.explain:
+            run_explain()
+        if args.breaking:
+            run_breaking_stage()
     except Exception as exc:
         logger.error("Pipeline failed: %s", exc, exc_info=True)
         sys.exit(1)
