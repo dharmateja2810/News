@@ -239,6 +239,10 @@ def run_clustering() -> dict:
                 """
             )
             unassigned = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error("Failed to fetch unassigned articles: %s", e)
+        conn.close()
+        return {"assigned": 0, "new_clusters": 0}
     finally:
         conn.close()
 
@@ -285,7 +289,7 @@ def run_clustering() -> dict:
             art_pub = _to_utc(article.get("published_at"))
 
             best_cluster_id: Optional[str] = None
-            best_score = 0.0
+            best_score = 0.02
 
             for cid, members in cluster_articles.items():
                 for member in members:
