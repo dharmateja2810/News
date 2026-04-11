@@ -243,10 +243,12 @@ export const HomeScreen: React.FC = () => {
     const saved = isSaved(item.id);
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
+    const hasWhyMatters = item.whyMatters.length > 0;
+
     return (
       <TouchableOpacity
         activeOpacity={1}
-        onPress={() => handleDoubleTap(item)}
+        onPress={() => hasWhyMatters && handleDoubleTap(item)}
         style={[styles.newsItem, { height: pageHeight }]}
       >
         {/* ── ILLUSTRATION ── */}
@@ -298,12 +300,12 @@ export const HomeScreen: React.FC = () => {
           </Text>
 
           {/* Summary */}
-          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={4}>
+          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 3 : 10}>
             {item.summary}
           </Text>
 
           {/* Why it matters */}
-          {item.whyMatters.length > 0 && (
+          {hasWhyMatters && (
             <View style={[styles.whyMattersBlock, { borderLeftColor: colors.accent }]}>
               <Text style={[styles.whyMattersLabel, { color: colors.accent }]}>WHY IT MATTERS</Text>
               <Text style={[styles.whyMattersText, { color: colors.textSecondary }]} numberOfLines={3}>
@@ -314,14 +316,18 @@ export const HomeScreen: React.FC = () => {
 
           {/* Bottom actions */}
           <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
-            <TouchableOpacity
-              style={[styles.viewMoreBtn, { backgroundColor: colors.accent + '20' }]}
-              onPress={() => void openDoubleClick(item)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="layers-outline" size={14} color={colors.accent} />
-              <Text style={[styles.viewMoreText, { color: colors.accent }]}>Read More</Text>
-            </TouchableOpacity>
+            {hasWhyMatters ? (
+              <TouchableOpacity
+                style={[styles.viewMoreBtn, { backgroundColor: colors.accent + '20' }]}
+                onPress={() => void openDoubleClick(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="layers-outline" size={14} color={colors.accent} />
+                <Text style={[styles.viewMoreText, { color: colors.accent }]}>Read More</Text>
+              </TouchableOpacity>
+            ) : (
+              <View />
+            )}
 
             <View style={styles.bottomActions}>
               <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.id)} activeOpacity={0.7}>
