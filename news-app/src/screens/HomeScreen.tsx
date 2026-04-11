@@ -40,6 +40,7 @@ interface CardItem {
   headline: string;
   summary: string;
   whyMatters: string;
+  doubleClick: string;
   category: string;
   tier: number;
   isBreaking: boolean;
@@ -58,6 +59,7 @@ function feedStoryToCard(s: FeedStory): CardItem {
     headline: s.headline,
     summary: s.summary,
     whyMatters: s.whyMatters || '',
+    doubleClick: s.doubleClick || '',
     category: s.category,
     tier: s.tier,
     isBreaking: s.isBreaking,
@@ -77,6 +79,7 @@ function articleToCard(a: UiArticle): CardItem {
     headline: a.title,
     summary: sentences.slice(0, 2).join(' ').trim() || a.description?.slice(0, 200) || '',
     whyMatters: sentences.slice(2, 4).join(' ').trim(),
+    doubleClick: '',
     category: a.category,
     tier: 2,
     isBreaking: false,
@@ -204,7 +207,7 @@ export const HomeScreen: React.FC = () => {
         headline: item.headline,
         summary: item.summary,
         whyMatters: item.whyMatters,
-        doubleClick: item.summary + (item.whyMatters ? `\n\n${item.whyMatters}` : ''),
+        doubleClick: item.doubleClick || item.summary + (item.whyMatters ? `\n\n${item.whyMatters}` : ''),
         category: item.category,
         tier: item.tier,
         feedRank: null,
@@ -299,9 +302,9 @@ export const HomeScreen: React.FC = () => {
             {item.headline}
           </Text>
 
-          {/* Summary */}
+          {/* Summary / explainer body */}
           <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 3 : 10}>
-            {item.summary}
+            {hasWhyMatters ? item.summary : (item.doubleClick || item.summary)}
           </Text>
 
           {/* Why it matters */}

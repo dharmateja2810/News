@@ -9,6 +9,7 @@ export interface FeedStory {
   headline: string;
   summary: string;
   whyMatters: string;
+  doubleClick: string;
   category: string;
   tier: number;
   feedRank: number | null;
