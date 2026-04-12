@@ -181,8 +181,7 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
         tokens = 700
         user = (
             f"Write a Tier 2 OzShorts Double Click explainer. Target: 300–400 words.\n\n"
-            f"STORY CLUSTER:\nHeadline: {meta['headline']}\n"
-            f"Why It Matters: {meta['why_it_matters']}\n\n"
+            f"STORY CLUSTER:\nHeadline: {meta['headline']}\n\n"
             f"SOURCE FACTS (use these — do not invent figures):\n{facts}\n\n"
             f"STRUCTURE TO FOLLOW:\n"
             f"1. Open with the news in one sentence — then immediately explain the 'so what'\n"
@@ -195,8 +194,7 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
         tokens = 400
         user = (
             f"Write a Tier 3 OzShorts Double Click explainer. Target: 150–200 words.\n\n"
-            f"STORY CLUSTER:\nHeadline: {meta['headline']}\n"
-            f"Why It Matters: {meta['why_it_matters']}\n\n"
+            f"STORY CLUSTER:\nHeadline: {meta['headline']}\n\n"
             f"SOURCE FACTS:\n{facts}\n\n"
             f"STRUCTURE TO FOLLOW:\n"
             f"1. State what happened, clearly and directly\n"
@@ -212,7 +210,7 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
 def _generate_card_summary(cluster_summary: str, facts: str) -> str:
     system = "You are OzShorts, an Australian news explainer. Write a short card summary for a news feed."
     user = (
-        "Write a card summary in exactly 50–60 words. Plain English, no jargon. "
+        "Write a card summary in exactly 50-60 words. Plain English, no jargon. "
         "One paragraph. State what happened and why it matters to an Australian professional. "
         "Do not editorialize.\n\n"
         f"STORY:\n{cluster_summary}\n\nFACTS:\n{facts}\n\n"
@@ -333,15 +331,19 @@ def generate_for_cluster(cluster_id: str) -> dict:
     logger.info("Cluster %s: generating headline...", cluster_id)
     meta = _generate_headline_meta(cluster_summary, facts, tier)
 
-    logger.info("Cluster %s: writing explainer body...", cluster_id)
-    explainer_body = _generate_explainer_body(meta, facts, tier)
-
     logger.info("Cluster %s: generating card summary...", cluster_id)
     card_summary = _generate_card_summary(cluster_summary, facts)
 
-    guardrail = _run_guardrails(explainer_body, facts, tier)
-    if guardrail["flags"]:
-        logger.warning("Cluster %s guardrail flags: %s", cluster_id, guardrail["flags"])
+    # Only Tier 1 gets a full explainer body + guardrails
+    if tier == 1:
+        logger.info("Cluster %s: writing explainer body (tier 1)...", cluster_id)
+        explainer_body = _generate_explainer_body(meta, facts, tier)
+        guardrail = _run_guardrails(explainer_body, facts, tier)
+        if guardrail["flags"]:
+            logger.warning("Cluster %s guardrail flags: %s", cluster_id, guardrail["flags"])
+    else:
+        explainer_body = ""
+        guardrail = {"flags": [], "should_reject": False}
 
     return {
         "headline": meta["headline"],
