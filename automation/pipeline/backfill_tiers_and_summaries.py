@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """
-Backfill script to process clusters one at a time.
-- Assigns tier if missing
-- Generates AI content if missing
+Backfill script to assign tiers and generate AI content for story clusters.
+- Finds story_clusters with tier = NULL
+- Derives tier from oz_score (>=0.7 → T1, >=0.4 → T2, else T3)
+- Generates AI content (headline, summary, why_it_matters for T1, explainer for T1)
+- Updates story_clusters.tier
+- If editor_queue entry exists, also updates AI content there
+
 Processes one cluster per run to avoid rate limiting.
-Run this repeatedly (e.g., in a loop with delays) to process all clusters.
+Run repeatedly or use --delay flag to process all clusters.
 """
 
 import sys
@@ -21,24 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 def find_next_incomplete_cluster():
-    """Find one cluster that needs processing."""
+    """Find one cluster that needs tier assignment."""
     conn = get_connection()
     try:
         with dict_cursor(conn) as cur:
-            # Find clusters in editor_queue that are missing AI content OR tier
+            # Find active clusters with NULL tier
             cur.execute(
                 """
-                SELECT eq.id as queue_id,
-                       eq.cluster_id,
-                       sc.tier,
-                       eq.ai_headline,
-                       eq.ai_summary
-                FROM editor_queue eq
-                JOIN story_clusters sc ON sc.id = eq.cluster_id
-                WHERE eq.ai_headline IS NULL
-                   OR eq.ai_summary IS NULL
-                   OR sc.tier IS NULL
-                ORDER BY eq.created_at ASC
+                SELECT id as cluster_id,
+                       tier,
+                       oz_score
+                FROM story_clusters
+                WHERE status = 'active'
+                  AND tier IS NULL
+                  AND oz_score > 0
+                ORDER BY oz_score DESC
                 LIMIT 1
                 """,
             )
@@ -47,11 +48,22 @@ def find_next_incomplete_cluster():
         conn.close()
 
 
-def update_queue_and_tier(queue_id: str, result: dict) -> None:
-    """Write AI content to editor_queue and tier to story_clusters."""
+def update_cluster_tier_and_queue(cluster_id: str, result: dict) -> None:
+    """Write tier to story_clusters and AI content to editor_queue if entry exists."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # Always update tier on story_clusters
+            cur.execute(
+                """
+                UPDATE story_clusters
+                SET tier = %s
+                WHERE id = %s
+                """,
+                (result["tier"], cluster_id),
+            )
+
+            # If editor_queue entry exists for this cluster, update it too
             cur.execute(
                 """
                 UPDATE editor_queue
@@ -59,24 +71,16 @@ def update_queue_and_tier(queue_id: str, result: dict) -> None:
                     ai_summary     = %s,
                     ai_why_matters = %s,
                     ai_double_click = %s
-                WHERE id = %s
+                WHERE cluster_id = %s
+                  AND ai_headline IS NULL
                 """,
                 (
                     result["headline"],
                     result["card_summary"],
                     result["why_it_matters"],
                     result["explainer_body"],
-                    queue_id,
+                    cluster_id,
                 ),
-            )
-            # Write tier to story_clusters
-            cur.execute(
-                """
-                UPDATE story_clusters
-                SET tier = %s
-                WHERE id = (SELECT cluster_id FROM editor_queue WHERE id = %s)
-                """,
-                (result["tier"], queue_id),
             )
         conn.commit()
     except Exception:
@@ -91,18 +95,16 @@ def process_one():
     row = find_next_incomplete_cluster()
 
     if not row:
-        logger.info("✓ All clusters processed!")
+        logger.info("✓ All clusters have tiers assigned!")
         return False
 
-    queue_id = row["queue_id"]
     cluster_id = row["cluster_id"]
     current_tier = row["tier"]
-    has_headline = row["ai_headline"] is not None
-    has_summary = row["ai_summary"] is not None
+    oz_score = row["oz_score"]
 
     logger.info(
-        "Processing queue_id=%s cluster=%s (tier=%s, has_headline=%s, has_summary=%s)",
-        queue_id, cluster_id, current_tier, has_headline, has_summary
+        "Processing cluster=%s (tier=%s, oz_score=%.3f)",
+        cluster_id, current_tier, oz_score
     )
 
     try:
@@ -110,7 +112,7 @@ def process_one():
         result = generate_for_cluster(cluster_id)
 
         # Update database
-        update_queue_and_tier(queue_id, result)
+        update_cluster_tier_and_queue(cluster_id, result)
 
         logger.info(
             "✓ Done: tier=%d, headline=%s, summary=%d chars, why_matters=%d chars, double_click=%d chars",
