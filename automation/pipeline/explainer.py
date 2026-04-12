@@ -94,32 +94,47 @@ def _extract_facts(cluster_summary: str) -> str:
     return _call_llm(system, f"ARTICLE CLUSTER:\n{cluster_summary}", max_tokens=800)
 
 
-def _generate_headline_meta(cluster_summary: str, facts: str) -> dict:
-    system = (
-        "Generate an OzShorts headline for the following story.\n"
-        "Rules:\n"
-        "- Maximum 12 words\n"
-        "- Plain English — no jargon\n"
-        "- Active voice\n"
-        "- States what happened, not why it might matter\n"
-        "- No question marks\n"
-        "- No colons\n"
-        "Also generate a 'Why it matters' line — maximum 20 words, "
-        "from the perspective of an Australian professional.\n\n"
-        "Output MUST be exactly in this format:\n"
-        "HEADLINE: <headline text>\n"
-        "WHY IT MATTERS: <why it matters text>"
-    )
+def _generate_headline_meta(cluster_summary: str, facts: str, tier: int) -> dict:
+    # Only generate "Why it matters" for Tier 1 (high-importance) articles
+    if tier == 1:
+        system = (
+            "Generate an OzShorts headline for the following story.\n"
+            "Rules:\n"
+            "- Maximum 12 words\n"
+            "- Plain English — no jargon\n"
+            "- Active voice\n"
+            "- States what happened, not why it might matter\n"
+            "- No question marks\n"
+            "- No colons\n"
+            "Also generate a 'Why it matters' line — maximum 20 words, "
+            "from the perspective of an Australian professional.\n\n"
+            "Output MUST be exactly in this format:\n"
+            "HEADLINE: <headline text>\n"
+            "WHY IT MATTERS: <why it matters text>"
+        )
+    else:
+        system = (
+            "Generate an OzShorts headline for the following story.\n"
+            "Rules:\n"
+            "- Maximum 12 words\n"
+            "- Plain English — no jargon\n"
+            "- Active voice\n"
+            "- States what happened, not why it might matter\n"
+            "- No question marks\n"
+            "- No colons\n\n"
+            "Output MUST be exactly in this format:\n"
+            "HEADLINE: <headline text>"
+        )
     user = f"STORY SUMMARY:\n{cluster_summary}\n\nFacts:\n{facts}\n\nOutput:\n"
     result = _call_llm(system, user, max_tokens=200)
 
     headline = "Default Headline"
-    why_it_matters = "Why it matters not available."
+    why_it_matters = ""
     for line in result.splitlines():
         upper = line.strip().upper()
         if upper.startswith("HEADLINE:"):
             headline = line.strip()[9:].strip()
-        elif upper.startswith("WHY IT MATTERS:"):
+        elif tier == 1 and upper.startswith("WHY IT MATTERS:"):
             why_it_matters = line.strip()[15:].strip()
     return {"headline": headline, "why_it_matters": why_it_matters}
 
@@ -316,7 +331,7 @@ def generate_for_cluster(cluster_id: str) -> dict:
     facts = _extract_facts(cluster_summary)
 
     logger.info("Cluster %s: generating headline...", cluster_id)
-    meta = _generate_headline_meta(cluster_summary, facts)
+    meta = _generate_headline_meta(cluster_summary, facts, tier)
 
     logger.info("Cluster %s: writing explainer body...", cluster_id)
     explainer_body = _generate_explainer_body(meta, facts, tier)
@@ -382,7 +397,8 @@ def generate_all_pending(limit: int = 20) -> int:
 
 
 def _update_queue_item(queue_id: str, result: dict) -> None:
-    """Write AI-generated content into an existing editor_queue row."""
+    """Write AI-generated content into an existing editor_queue row
+    and persist the derived tier back to story_clusters."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -402,6 +418,16 @@ def _update_queue_item(queue_id: str, result: dict) -> None:
                     result["explainer_body"],
                     queue_id,
                 ),
+            )
+            # Write derived tier back to story_clusters so the publisher
+            # picks up the correct tier instead of defaulting to 2.
+            cur.execute(
+                """
+                UPDATE story_clusters
+                SET tier = %s
+                WHERE id = (SELECT cluster_id FROM editor_queue WHERE id = %s)
+                """,
+                (result["tier"], queue_id),
             )
         conn.commit()
     except Exception:

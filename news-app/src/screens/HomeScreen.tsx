@@ -252,7 +252,7 @@ export const HomeScreen: React.FC = () => {
     const saved = isSaved(item.id);
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
-    const hasWhyMatters = item.whyMatters.length > 0;
+    const hasWhyMatters = item.tier === 1 && item.whyMatters.length > 0;
 
     return (
       <TouchableOpacity
@@ -401,8 +401,8 @@ export const HomeScreen: React.FC = () => {
               {/* Summary */}
               <Text style={[styles.modalSummary, { color: colors.textSecondary }]}>{story.summary}</Text>
 
-              {/* Why it matters */}
-              {story.whyMatters && story.whyMatters.length > 0 && (
+              {/* Why it matters — only for Tier 1 */}
+              {story.tier === 1 && story.whyMatters && story.whyMatters.length > 0 && (
                 <View style={[styles.whyMattersBlock, { borderLeftColor: catColor }]}>
                   <Text style={[styles.whyMattersLabel, { color: catColor }]}>WHY IT MATTERS</Text>
                   <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>{story.whyMatters}</Text>
