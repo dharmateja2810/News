@@ -105,6 +105,25 @@ def dict_cursor(conn):
     return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
 
+def release_connection(conn) -> None:
+    """
+    Return a connection back to the pool.
+    Always call this instead of conn.close() — calling conn.close() destroys
+    the physical connection but leaves the pool slot checked out, which
+    eventually exhausts the pool.
+    """
+    pool = _init_pool()
+    try:
+        pool.putconn(conn)
+        logger.debug("Returned connection to pool")
+    except Exception as e:
+        logger.warning(f"Failed to return connection to pool: {e}")
+        try:
+            conn.close()  # last resort — discard it
+        except Exception:
+            pass
+
+
 def close_pool():
     """Close all connections in the pool (call at shutdown)."""
     global _pool

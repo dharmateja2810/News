@@ -9,8 +9,10 @@ This script:
 4. Updates the editor_queue with the AI content
 """
 import logging
+import time
+import uuid
 from datetime import date
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 from explainer import generate_for_cluster
 
 logging.basicConfig(
@@ -39,15 +41,14 @@ def get_tier1_clusters():
             )
             return cur.fetchall()
     finally:
-        conn.close()
+        release_connection(conn)
 
 
 def ensure_editor_queue_entry(cluster_id: str, category: str) -> None:
-    """Create editor_queue entry if it doesn't exist."""
-    conn = get_connection()
+    """Create editor_queue entry if it doesn't exist. Generates UUID for id."""
+    conn = get_connection(max_retries=2)
     try:
         with dict_cursor(conn) as cur:
-            # Check if entry exists
             cur.execute(
                 """
                 SELECT id FROM editor_queue
@@ -57,24 +58,27 @@ def ensure_editor_queue_entry(cluster_id: str, category: str) -> None:
             )
             existing = cur.fetchone()
 
-            if existing:
-                logger.info(f"  Editor queue entry already exists for cluster {cluster_id}")
-                return
+        if existing:
+            logger.info(f"  Editor queue entry already exists for cluster {cluster_id}")
+            return
 
-            # Create new entry
-            logger.info(f"  Creating editor_queue entry for cluster {cluster_id}")
+        # Create new entry with generated UUID
+        logger.info(f"  Creating editor_queue entry for cluster {cluster_id}")
+        queue_id = str(uuid.uuid4())
+        with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO editor_queue
-                    (cluster_id, edition, edition_date, status, suggested_rank)
-                VALUES (%s, %s, %s, %s, %s)
+                    (id, cluster_id, edition, edition_date, status, suggested_rank)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (
+                    queue_id,
                     cluster_id,
-                    "morning",  # Default to morning edition
+                    "morning",
                     date.today(),
                     "pending",
-                    999,  # Low priority rank since we're backfilling
+                    999,
                 ),
             )
         conn.commit()
@@ -82,12 +86,12 @@ def ensure_editor_queue_entry(cluster_id: str, category: str) -> None:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
 
 def update_editor_queue_ai_content(cluster_id: str, result: dict) -> None:
     """Update editor_queue with AI-generated content."""
-    conn = get_connection()
+    conn = get_connection(max_retries=2)
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -114,44 +118,60 @@ def update_editor_queue_ai_content(cluster_id: str, result: dict) -> None:
             f"why_matters={len(result['why_it_matters'])} chars, "
             f"double_click={len(result['explainer_body'])} chars"
         )
-    except Exception:
+    except Exception as e:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
 
-def process_tier1_cluster(cluster_id: str, category: str) -> bool:
-    """Process a single Tier 1 cluster."""
+def process_tier1_cluster(cluster_id: str, category: str, max_retries: int = 3) -> bool:
+    """Process a single Tier 1 cluster. AI generation runs once; only DB writes are retried."""
     logger.info(f"\nProcessing cluster {cluster_id} (category={category})")
 
+    # Step 1: Ensure editor_queue entry exists
     try:
-        # Step 1: Ensure editor_queue entry exists
         ensure_editor_queue_entry(cluster_id, category)
-
-        # Step 2: Generate AI content
-        logger.info(f"  Generating AI content...")
-        result = generate_for_cluster(cluster_id)
-
-        # Verify it's actually Tier 1
-        if result["tier"] != 1:
-            logger.warning(
-                f"  ⚠ Cluster {cluster_id} was recalculated as Tier {result['tier']}, skipping..."
-            )
-            return False
-
-        # Step 3: Update editor_queue with AI content
-        update_editor_queue_ai_content(cluster_id, result)
-
-        logger.info(f"  ✓ Successfully processed cluster {cluster_id}")
-        return True
-
     except Exception as exc:
-        logger.error(f"  ✗ Failed to process cluster {cluster_id}: {exc}")
+        logger.error(f"  ✗ Failed to create queue entry for {cluster_id}: {exc}")
         return False
 
+    # Step 2: Generate AI content (only once — LLM calls are expensive)
+    try:
+        logger.info(f"  Generating AI content...")
+        result = generate_for_cluster(cluster_id)
+    except Exception as exc:
+        logger.error(f"  ✗ AI generation failed for {cluster_id}: {exc}")
+        return False
 
-def main(limit: int = None, delay_seconds: int = 2):
+    # Verify it's actually Tier 1
+    if result["tier"] != 1:
+        logger.warning(
+            f"  ⚠ Cluster {cluster_id} recalculated as Tier {result['tier']}, skipping..."
+        )
+        return False
+
+    # Step 3: Write AI content to DB — retry only this step on transient failures
+    for attempt in range(max_retries):
+        try:
+            update_editor_queue_ai_content(cluster_id, result)
+            logger.info(f"  ✓ Successfully processed cluster {cluster_id}")
+            return True
+        except Exception as exc:
+            error_msg = str(exc)
+            if ("pool exhausted" in error_msg.lower() or "timeout" in error_msg.lower()) and attempt < max_retries - 1:
+                wait = 5 * (attempt + 1)
+                logger.warning(f"  ⚠ DB write transient error (attempt {attempt + 1}/{max_retries}), retrying in {wait}s: {error_msg[:80]}")
+                time.sleep(wait)
+            else:
+                logger.error(f"  ✗ DB write failed for {cluster_id}: {error_msg[:150]}")
+                return False
+
+    return False
+
+
+def main(limit: int = None, delay_seconds: int = 0
+         ):
     """
     Fill AI content for all Tier 1 clusters.
 
@@ -190,7 +210,6 @@ def main(limit: int = None, delay_seconds: int = 2):
 
         # Delay between clusters (except last one)
         if i < len(clusters) and delay_seconds > 0:
-            import time
             logger.info(f"  Waiting {delay_seconds}s before next cluster...")
             time.sleep(delay_seconds)
 

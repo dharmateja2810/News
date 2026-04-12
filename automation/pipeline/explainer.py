@@ -11,7 +11,7 @@ import json
 import logging
 import re
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ def generate_for_cluster(cluster_id: str) -> dict:
             )
             row = cur.fetchone()
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not row:
         raise ValueError(f"Cluster {cluster_id} not found or has no articles")
@@ -375,7 +375,7 @@ def generate_all_pending(limit: int = 20) -> int:
             )
             pending = cur.fetchall()
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not pending:
         logger.info("No pending editor_queue items to generate")
@@ -436,4 +436,4 @@ def _update_queue_item(queue_id: str, result: dict) -> None:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
