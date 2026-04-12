@@ -7,8 +7,7 @@ Backfill script to assign tiers and generate AI content for story clusters.
 - Updates story_clusters.tier
 - If editor_queue entry exists, also updates AI content there
 
-Processes one cluster per run to avoid rate limiting.
-Run repeatedly or use --delay flag to process all clusters.
+Fetches all clusters at once, then processes them one by one with delays.
 """
 
 import sys
@@ -24,12 +23,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def find_next_incomplete_cluster():
-    """Find one cluster that needs tier assignment."""
+def get_all_incomplete_clusters():
+    """Fetch all clusters that need tier assignment in one query."""
     conn = get_connection()
     try:
         with dict_cursor(conn) as cur:
-            # Find active clusters with NULL tier
+            # Find all active clusters with NULL tier
             cur.execute(
                 """
                 SELECT id as cluster_id,
@@ -40,10 +39,9 @@ def find_next_incomplete_cluster():
                   AND tier IS NULL
                   AND oz_score > 0
                 ORDER BY oz_score DESC
-                LIMIT 1
                 """,
             )
-            return cur.fetchone()
+            return cur.fetchall()
     finally:
         conn.close()
 
@@ -90,32 +88,19 @@ def update_cluster_tier_and_queue(cluster_id: str, result: dict) -> None:
         conn.close()
 
 
-def process_one():
-    """Process one incomplete cluster."""
-    row = find_next_incomplete_cluster()
-
-    if not row:
-        logger.info("✓ All clusters have tiers assigned!")
-        return False
-
-    cluster_id = row["cluster_id"]
-    current_tier = row["tier"]
-    oz_score = row["oz_score"]
-
-    logger.info(
-        "Processing cluster=%s (tier=%s, oz_score=%.3f)",
-        cluster_id, current_tier, oz_score
-    )
+def process_cluster(cluster_id: str, oz_score: float) -> bool:
+    """Process a single cluster - generate content and assign tier."""
+    logger.info("Processing cluster=%s (oz_score=%.3f)", cluster_id, oz_score)
 
     try:
-        # Generate AI content (this also derives tier if missing)
+        # Generate AI content (this also derives tier)
         result = generate_for_cluster(cluster_id)
 
         # Update database
         update_cluster_tier_and_queue(cluster_id, result)
 
         logger.info(
-            "✓ Done: tier=%d, headline=%s, summary=%d chars, why_matters=%d chars, double_click=%d chars",
+            "✓ Done: tier=%d, headline='%s', summary=%d chars, why_matters=%d chars, double_click=%d chars",
             result["tier"],
             result["headline"][:50] + "..." if len(result["headline"]) > 50 else result["headline"],
             len(result["card_summary"]),
@@ -125,25 +110,61 @@ def process_one():
         return True
 
     except Exception as exc:
-        logger.error("Failed to process cluster %s: %s", cluster_id, exc)
-        return True  # Continue processing other clusters
+        logger.error("✗ Failed cluster %s: %s", cluster_id, exc)
+        return False
 
 
 def backfill_all(delay_seconds: int = 2):
-    """Process all incomplete clusters with delay between each."""
-    logger.info("Starting backfill (delay=%ds between requests)...", delay_seconds)
+    """Fetch all clusters at once, process them one by one with delays."""
+    logger.info("Fetching all clusters with NULL tiers...")
+    clusters = get_all_incomplete_clusters()
 
-    count = 0
-    while True:
-        has_more = process_one()
-        if not has_more:
-            break
+    if not clusters:
+        logger.info("✓ All clusters already have tiers assigned!")
+        return
 
-        count += 1
-        logger.info("Processed %d clusters. Waiting %ds before next...", count, delay_seconds)
-        time.sleep(delay_seconds)
+    total = len(clusters)
+    logger.info("Found %d clusters to process. Starting (delay=%ds)...", total, delay_seconds)
 
-    logger.info("Backfill complete: %d clusters processed", count)
+    success_count = 0
+    fail_count = 0
+
+    for i, row in enumerate(clusters, 1):
+        cluster_id = row["cluster_id"]
+        oz_score = row["oz_score"]
+
+        logger.info("[%d/%d] Processing cluster %s...", i, total, cluster_id)
+
+        if process_cluster(cluster_id, oz_score):
+            success_count += 1
+        else:
+            fail_count += 1
+
+        # Delay before next (except for the last one)
+        if i < total:
+            logger.info("Waiting %ds before next request...", delay_seconds)
+            time.sleep(delay_seconds)
+
+    logger.info(
+        "Backfill complete: %d/%d succeeded, %d failed",
+        success_count, total, fail_count
+    )
+
+
+def process_one():
+    """Process just one cluster (for testing)."""
+    clusters = get_all_incomplete_clusters()
+
+    if not clusters:
+        logger.info("✓ All clusters already have tiers assigned!")
+        return
+
+    row = clusters[0]
+    cluster_id = row["cluster_id"]
+    oz_score = row["oz_score"]
+
+    logger.info("Processing 1 of %d remaining clusters", len(clusters))
+    process_cluster(cluster_id, oz_score)
 
 
 if __name__ == "__main__":
