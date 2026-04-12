@@ -14,14 +14,12 @@ const PUSH_TOKEN_KEY = '@daily_digest_push_token';
 
 export interface NotificationSettings {
   enabled: boolean;
-  breakingNews: boolean;
   dailyDigest: boolean;
   savedArticleUpdates: boolean;
 }
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   enabled: true,
-  breakingNews: true,
   dailyDigest: true,
   savedArticleUpdates: false,
 };
@@ -90,13 +88,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#3b82f6',
-    });
-
-    await Notifications.setNotificationChannelAsync('breaking-news', {
-      name: 'Breaking News',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 500, 250, 500],
-      lightColor: '#ef4444',
     });
 
     await Notifications.setNotificationChannelAsync('daily-digest', {

@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Optional
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,7 @@ def process_article(article_id: str) -> None:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
 
 def process_unprocessed(batch_size: int = 200) -> int:
@@ -276,7 +276,7 @@ def process_unprocessed(batch_size: int = 200) -> int:
             )
             rows = cur.fetchall()
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not rows:
         logger.info("No unprocessed articles found")

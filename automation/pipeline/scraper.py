@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 # for this local pipeline tool that only fetches known news RSS URLs.
 ssl._create_default_https_context = ssl._create_unverified_context
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 # ── HTTP session for article fetching ────────────────────────────────────────
 
@@ -255,7 +255,7 @@ def _scrape_source(source: dict) -> int:
                     exc,
                 )
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not candidates:
         logger.info("Source '%s': no new candidates", source["slug"])
@@ -356,7 +356,7 @@ def _scrape_source(source: dict) -> int:
                     exc,
                 )
     finally:
-        conn.close()
+        release_connection(conn)
 
     logger.info(
         "Source '%s': %d new article(s) from %d entries (%d candidates)",
@@ -382,7 +382,7 @@ def scrape_all_active(max_workers: int = 8) -> dict:
             )
             sources = cur.fetchall()
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not sources:
         logger.warning("No active sources found in DB")
@@ -420,7 +420,7 @@ def scrape_source(slug: str) -> int:
             )
             source = cur.fetchone()
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not source:
         raise ValueError(f"Source with slug '{slug}' not found")

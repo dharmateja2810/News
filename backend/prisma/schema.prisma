@@ -55,7 +55,6 @@ model Article {
   updatedAt       DateTime         @updatedAt @map("updated_at")
   bookmarks       Bookmark[]
   likes           Like[]
-  explainer       Explainer?
   clusterLinks    ClusterArticle[]
 
   @@index([category])
@@ -99,23 +98,7 @@ model Category {
   @@map("categories")
 }
 
-model Explainer {
-  id           String   @id @default(uuid())
-  articleId    String   @unique @map("article_id")
-  article      Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  tier         Int      // 1, 2, or 3
-  headline     String
-  whyItMatters String   @map("why_it_matters")
-  content      String   @db.Text
-  ozScore      Float?   @map("oz_score")
-  status       String   @default("draft") // "draft", "published", "rejected"
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@map("explainers")
-}
-
-// ─── Pipeline Models (from TechSpec) ───────────────────────────────────────────
+// ─── Pipeline Models ───────────────────────────────────────────────────────────
 
 model Source {
   id               String   @id @default(uuid())
@@ -151,18 +134,14 @@ model StoryCluster {
   auRelevanceScore   Float?           @map("au_relevance_score")
   engagementScore    Float?           @map("engagement_score")
   tier               Int?
-  isBreaking         Boolean          @default(false) @map("is_breaking")
-  breakingFiredAt    DateTime?        @map("breaking_fired_at")
   status             String           @default("active") // active | archived | suppressed
   articles           Article[]
   clusterArticles    ClusterArticle[]
-  editorQueueItems   EditorQueue[]
-  publishedStories   PublishedStory[]
+  clusterContent     ClusterContent?
 
   @@index([ozScore])
   @@index([status])
   @@index([category])
-  @@index([isBreaking])
   @@map("story_clusters")
 }
 
@@ -178,52 +157,17 @@ model ClusterArticle {
   @@map("cluster_articles")
 }
 
-model EditorQueue {
-  id              String          @id @default(uuid())
-  clusterId       String          @map("cluster_id")
-  cluster         StoryCluster    @relation(fields: [clusterId], references: [id], onDelete: Cascade)
-  edition         String          // 'morning' | 'evening' | 'breaking'
-  editionDate     DateTime        @map("edition_date") @db.Date
-  suggestedRank   Int?            @map("suggested_rank")
-  aiHeadline      String?         @map("ai_headline")
-  aiSummary       String?         @map("ai_summary") @db.Text
-  aiWhyMatters    String?         @map("ai_why_matters")
-  aiDoubleClick   String?         @map("ai_double_click") @db.Text
-  aiImagePrompt   String?         @map("ai_image_prompt")
-  status          String          @default("pending") // pending | approved | edited | rejected | deferred
-  editorHeadline  String?         @map("editor_headline")
-  editorSummary   String?         @map("editor_summary") @db.Text
-  editorNotes     String?         @map("editor_notes") @db.Text
-  createdAt       DateTime        @default(now()) @map("created_at")
-  reviewedAt      DateTime?       @map("reviewed_at")
-  publishedStory  PublishedStory?
+model ClusterContent {
+  id           String       @id @default(uuid())
+  clusterId    String       @unique @map("cluster_id")
+  cluster      StoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  headline     String
+  summary      String       @db.Text
+  whyItMatters String?      @map("why_it_matters")
+  doubleClick  String?      @map("double_click") @db.Text
+  tier         Int
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
 
-  @@index([edition, editionDate])
-  @@index([status])
-  @@map("editor_queue")
-}
-
-model PublishedStory {
-  id             String       @id @default(uuid())
-  clusterId      String       @map("cluster_id")
-  cluster        StoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
-  queueId        String       @unique @map("queue_id")
-  queueItem      EditorQueue  @relation(fields: [queueId], references: [id], onDelete: Cascade)
-  edition        String       // 'morning' | 'evening' | 'breaking'
-  editionDate    DateTime     @map("edition_date") @db.Date
-  feedRank       Int?         @map("feed_rank")
-  headline       String
-  summary        String       @db.Text
-  whyMatters     String       @map("why_matters")
-  doubleClick    String       @map("double_click") @db.Text
-  category       String
-  tier           Int
-  illustrationId String?      @map("illustration_id")
-  isBreaking     Boolean      @default(false) @map("is_breaking")
-  publishedAt    DateTime     @default(now()) @map("published_at")
-
-  @@index([edition, editionDate])
-  @@index([publishedAt])
-  @@index([isBreaking])
-  @@map("published_stories")
+  @@map("cluster_content")
 }

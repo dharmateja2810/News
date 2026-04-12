@@ -3,8 +3,7 @@ AI explainer — generates headline, summary, why-it-matters, and Double Click
 content for story clusters using OpenAI GPT-4o.
 
 Public API:
-  generate_for_cluster(cluster_id)  → dict  (4 LLM calls, no DB write)
-  generate_all_pending(limit=20)    → int   (fills editor_queue rows lacking ai_headline)
+  generate_for_cluster(cluster_id, tier)  → dict  (4 LLM calls, no DB write)
 """
 
 import json
@@ -36,20 +35,6 @@ def _get_client():
         )
     _client = OpenAI(api_key=api_key)
     return _client
-
-
-# ---------------------------------------------------------------------------
-# Tier helper
-# ---------------------------------------------------------------------------
-
-def _derive_tier(oz_score: float, cluster_tier) -> int:
-    if cluster_tier:
-        return int(cluster_tier)
-    if oz_score >= 0.7:
-        return 1
-    if oz_score >= 0.4:
-        return 2
-    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -207,10 +192,10 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
     return _call_llm(system, user, max_tokens=tokens)
 
 
-def _generate_card_summary(cluster_summary: str, facts: str) -> str:
+def _generate_card_summary(cluster_summary: str, facts: str, word_limit: int = 60) -> str:
     system = "You are OzShorts, an Australian news explainer. Write a short card summary for a news feed."
     user = (
-        "Write a card summary in exactly 50-60 words. Plain English, no jargon. "
+        f"Write a card summary in no more than {word_limit} words. Plain English, no jargon. "
         "One paragraph. State what happened and why it matters to an Australian professional. "
         "Do not editorialize.\n\n"
         f"STORY:\n{cluster_summary}\n\nFACTS:\n{facts}\n\n"
@@ -282,17 +267,21 @@ def _run_guardrails(content: str, facts: str, tier: int) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
-def generate_for_cluster(cluster_id: str) -> dict:
+def generate_for_cluster(cluster_id: str, tier: int) -> dict:
     """
     Run all 4 LLM steps for a cluster and return the result dict.
     Does NOT write to the database — callers handle persistence.
+
+    Args:
+        cluster_id: UUID of the story cluster
+        tier: Pre-assigned tier (1, 2, or 3)
     """
     conn = get_connection()
     try:
         with dict_cursor(conn) as cur:
             cur.execute(
                 """
-                SELECT sc.id, sc.oz_score, sc.tier,
+                SELECT sc.id,
                        json_agg(
                            json_build_object(
                                'source', a.source,
@@ -304,7 +293,7 @@ def generate_for_cluster(cluster_id: str) -> dict:
                 FROM story_clusters sc
                 JOIN articles a ON a.cluster_id = sc.id
                 WHERE sc.id = %s
-                GROUP BY sc.id, sc.oz_score, sc.tier
+                GROUP BY sc.id
                 """,
                 (cluster_id,),
             )
@@ -314,9 +303,6 @@ def generate_for_cluster(cluster_id: str) -> dict:
 
     if not row:
         raise ValueError(f"Cluster {cluster_id} not found or has no articles")
-
-    oz_score = float(row["oz_score"] or 0.0)
-    tier = _derive_tier(oz_score, row["tier"])
 
     # Build cluster summary from top 5 articles
     articles = row["articles"] or []
@@ -331,8 +317,9 @@ def generate_for_cluster(cluster_id: str) -> dict:
     logger.info("Cluster %s: generating headline...", cluster_id)
     meta = _generate_headline_meta(cluster_summary, facts, tier)
 
-    logger.info("Cluster %s: generating card summary...", cluster_id)
-    card_summary = _generate_card_summary(cluster_summary, facts)
+    word_limit = 50 if tier == 1 else 100
+    logger.info("Cluster %s: generating card summary (word_limit=%d)...", cluster_id, word_limit)
+    card_summary = _generate_card_summary(cluster_summary, facts, word_limit)
 
     # Only Tier 1 gets a full explainer body + guardrails
     if tier == 1:
@@ -354,86 +341,3 @@ def generate_for_cluster(cluster_id: str) -> dict:
         "guardrail_flags": guardrail["flags"],
         "should_reject": guardrail["should_reject"],
     }
-
-
-def generate_all_pending(limit: int = 20) -> int:
-    """
-    Find editor_queue rows that have no AI headline and fill them in.
-    Returns the number of queue items processed.
-    """
-    conn = get_connection()
-    try:
-        with dict_cursor(conn) as cur:
-            cur.execute(
-                """
-                SELECT id, cluster_id
-                FROM editor_queue
-                WHERE ai_headline IS NULL
-                LIMIT %s
-                """,
-                (limit,),
-            )
-            pending = cur.fetchall()
-    finally:
-        release_connection(conn)
-
-    if not pending:
-        logger.info("No pending editor_queue items to generate")
-        return 0
-
-    logger.info("Generating AI content for %d queue item(s)...", len(pending))
-    processed = 0
-    for row in pending:
-        queue_id = row["id"]
-        cluster_id = row["cluster_id"]
-        try:
-            result = generate_for_cluster(cluster_id)
-            _update_queue_item(queue_id, result)
-            logger.info("Queue item %s done (cluster %s)", queue_id, cluster_id)
-            processed += 1
-        except Exception as exc:
-            logger.error("Failed queue item %s (cluster %s): %s", queue_id, cluster_id, exc)
-
-    logger.info("generate_all_pending complete: %d/%d processed", processed, len(pending))
-    return processed
-
-
-def _update_queue_item(queue_id: str, result: dict) -> None:
-    """Write AI-generated content into an existing editor_queue row
-    and persist the derived tier back to story_clusters."""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE editor_queue
-                SET ai_headline    = %s,
-                    ai_summary     = %s,
-                    ai_why_matters = %s,
-                    ai_double_click = %s
-                WHERE id = %s
-                """,
-                (
-                    result["headline"],
-                    result["card_summary"],
-                    result["why_it_matters"],
-                    result["explainer_body"],
-                    queue_id,
-                ),
-            )
-            # Write derived tier back to story_clusters so the publisher
-            # picks up the correct tier instead of defaulting to 2.
-            cur.execute(
-                """
-                UPDATE story_clusters
-                SET tier = %s
-                WHERE id = (SELECT cluster_id FROM editor_queue WHERE id = %s)
-                """,
-                (result["tier"], queue_id),
-            )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        release_connection(conn)

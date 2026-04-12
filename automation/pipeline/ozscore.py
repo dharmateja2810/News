@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +122,11 @@ def _compute_freshness(first_seen_at: Optional[datetime]) -> float:
     return 0.1
 
 
-def _compute_novelty(published_stories: list) -> float:
-    if not published_stories:
+def _compute_novelty(existing_content: list) -> float:
+    if not existing_content:
         return 1.0
     most_recent = max(
-        (s["published_at"] for s in published_stories if s.get("published_at")),
+        (s["created_at"] for s in existing_content if s.get("created_at")),
         default=None,
     )
     if most_recent is None:
@@ -162,25 +162,18 @@ def _compute_boosts(text: str, unique_source_count: int) -> float:
     return boost
 
 
-def _compute_penalties(published_stories: list, cluster_quality: float) -> float:
+def _compute_penalties(existing_content: list, cluster_quality: float) -> float:
     if cluster_quality < 0.4:
         return 0.0
-    if published_stories:
+    if existing_content:
         now = datetime.now(timezone.utc)
-        today_str = now.strftime("%Y-%m-%d")
-        for s in published_stories:
-            ed = s.get("edition_date")
-            if ed:
-                ed_str = ed.strftime("%Y-%m-%d") if isinstance(ed, datetime) else str(ed)[:10]
-                if ed_str == today_str:
-                    return 0.0
         twelve_ago = now - timedelta(hours=12)
-        for s in published_stories:
-            pub = s.get("published_at")
-            if pub:
-                if pub.tzinfo is None:
-                    pub = pub.replace(tzinfo=timezone.utc)
-                if pub >= twelve_ago:
+        for s in existing_content:
+            created = s.get("created_at")
+            if created:
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                if created >= twelve_ago:
                     return 0.3
     return 1.0
 
@@ -218,14 +211,14 @@ def score_cluster(cluster_id: str) -> dict:
 
             cur.execute(
                 """
-                SELECT id, edition, edition_date, published_at
-                FROM published_stories WHERE cluster_id = %s
+                SELECT id, created_at
+                FROM cluster_content WHERE cluster_id = %s
                 """,
                 (cluster_id,),
             )
-            published_stories = [dict(r) for r in cur.fetchall()]
+            existing_content = [dict(r) for r in cur.fetchall()]
     finally:
-        conn.close()
+        release_connection(conn)
 
     topic_text = (cluster.get("topic") or "").lower()
     all_titles = " ".join(a.get("title", "").lower() for a in articles)
@@ -237,7 +230,7 @@ def score_cluster(cluster_id: str) -> dict:
         "A": _compute_authority(articles),
         "R": _compute_au_relevance(articles),
         "F": _compute_freshness(cluster.get("first_seen_at")),
-        "N": _compute_novelty(published_stories),
+        "N": _compute_novelty(existing_content),
         "E": _compute_engagement(combined_text),
         "S": _compute_strategic_fit(cluster.get("category")),
     }
@@ -251,7 +244,7 @@ def score_cluster(cluster_id: str) -> dict:
     oz_score_morning += boost
     oz_score_evening += boost
 
-    penalty = _compute_penalties(published_stories, cluster.get("cluster_quality") or 0.0)
+    penalty = _compute_penalties(existing_content, cluster.get("cluster_quality") or 0.0)
     oz_score         *= penalty
     oz_score_morning *= penalty
     oz_score_evening *= penalty
@@ -285,7 +278,7 @@ def score_cluster(cluster_id: str) -> dict:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
     logger.debug(
         "Cluster %s: oz=%.3f morning=%.3f evening=%.3f",
@@ -306,7 +299,7 @@ def score_all_active() -> int:
             cur.execute("SELECT id FROM story_clusters WHERE status = 'active'")
             cluster_ids = [r["id"] for r in cur.fetchall()]
     finally:
-        conn.close()
+        release_connection(conn)
 
     logger.info("Scoring %d active cluster(s)", len(cluster_ids))
     scored = 0

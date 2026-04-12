@@ -1,6 +1,6 @@
 /**
- * Feed API — fetches published stories (not raw articles)
- * Matches the OzShorts spec: /api/feed/latest, /api/feed/story/:id, /api/feed/breaking
+ * Feed API — fetches stories from cluster_content
+ * Endpoints: /api/feed/latest, /api/feed/story/:id
  */
 import { api } from './api';
 
@@ -14,7 +14,6 @@ export interface FeedStory {
   tier: number;
   feedRank: number | null;
   illustrationId: string | null;
-  isBreaking: boolean;
   edition: string;
   publishedAt: string;
   cluster?: {
@@ -53,15 +52,9 @@ export interface StoryResponse {
   story: FeedStoryDetail;
 }
 
-/** Get the most recently published feed */
+/** Get the latest feed ordered by OzScore */
 export async function getLatestFeed(): Promise<FeedResponse> {
   const res = await api.get<FeedResponse>('/feed/latest');
-  return res.data;
-}
-
-/** Get feed for a specific edition and date */
-export async function getFeed(edition: string, date: string): Promise<FeedResponse> {
-  const res = await api.get<FeedResponse>('/feed', { params: { edition, date } });
   return res.data;
 }
 
@@ -71,8 +64,3 @@ export async function getStoryDetail(storyId: string): Promise<StoryResponse> {
   return res.data;
 }
 
-/** Get today's breaking stories */
-export async function getBreakingStories(): Promise<FeedResponse> {
-  const res = await api.get<FeedResponse>('/feed/breaking');
-  return res.data;
-}

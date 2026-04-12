@@ -5,9 +5,6 @@ import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { FeedModule } from './feed/feed.module';
-import { EditorModule } from './editor/editor.module';
-import { PublisherModule } from './publisher/publisher.module';
-import { BreakingModule } from './breaking/breaking.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
 
@@ -15,7 +12,6 @@ import { HealthController } from './health/health.controller';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      // NOTE: .env files are blocked in this environment, so we use config.env instead.
       envFilePath: ['config.env'],
     }),
     PrismaModule,
@@ -24,11 +20,7 @@ import { HealthController } from './health/health.controller';
     ArticlesModule,
     BookmarksModule,
     FeedModule,
-    EditorModule,
-    PublisherModule,
-    BreakingModule,
   ],
   controllers: [HealthController],
 })
 export class AppModule {}
-

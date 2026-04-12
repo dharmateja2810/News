@@ -10,7 +10,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ def _hash_dedup(articles: list) -> int:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
     return dup_count
 
@@ -160,7 +160,7 @@ def _title_similarity_dedup(articles: list) -> int:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
     return dup_count
 
@@ -185,7 +185,7 @@ def run_dedup() -> dict:
             )
             recent = [dict(r) for r in cur.fetchall()]
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not recent:
         logger.info("No recent processed articles to deduplicate")

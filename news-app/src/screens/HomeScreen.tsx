@@ -2,7 +2,7 @@
  * Home Screen — OzShorts spec-compliant card layout
  *
  * Card shows: Illustration, Headline, Summary, "Why it matters",
- *             Category pill, Tier badge, Breaking label, Source count
+ *             Category pill, Tier badge, Source count
  * Double tap / "View more": opens the Double Click explainer
  */
 
@@ -43,16 +43,15 @@ interface CardItem {
   doubleClick: string;
   category: string;
   tier: number;
-  isBreaking: boolean;
   sourceCount: number;
   source: string;
   time: string;
   sourceUrl: string;
-  /** If this came from /feed, we have the published story id for double-click */
-  publishedStoryId?: string;
+  /** cluster_content id for double-click detail */
+  storyId?: string;
 }
 
-/** Map a FeedStory (published) to CardItem */
+/** Map a FeedStory to CardItem */
 function feedStoryToCard(s: FeedStory): CardItem {
   return {
     id: s.id,
@@ -62,12 +61,11 @@ function feedStoryToCard(s: FeedStory): CardItem {
     doubleClick: s.doubleClick || '',
     category: s.category,
     tier: s.tier,
-    isBreaking: s.isBreaking,
     sourceCount: s.cluster?.uniqueSourceCount ?? 1,
     source: s.cluster?.topic ?? s.category,
     time: formatRelativeTime(s.publishedAt),
     sourceUrl: '',
-    publishedStoryId: s.id,
+    storyId: s.id,
   };
 }
 
@@ -88,7 +86,6 @@ function articleToCard(a: UiArticle): CardItem {
     doubleClick,
     category: a.category,
     tier: 2,
-    isBreaking: false,
     sourceCount: 1,
     source: a.source,
     time: a.time,
@@ -195,11 +192,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   const openDoubleClick = async (item: CardItem) => {
-    if (item.publishedStoryId) {
+    if (item.storyId) {
       setDetailLoading(true);
       setDetailVisible(true);
       try {
-        const res = await getStoryDetail(item.publishedStoryId);
+        const res = await getStoryDetail(item.storyId);
         setDetailStory(res.story);
       } catch {
         setDetailStory(null);
@@ -218,8 +215,7 @@ export const HomeScreen: React.FC = () => {
         tier: item.tier,
         feedRank: null,
         illustrationId: null,
-        isBreaking: item.isBreaking,
-        edition: 'morning',
+        edition: 'latest',
         publishedAt: new Date().toISOString(),
       });
       setDetailVisible(true);
@@ -267,13 +263,6 @@ export const HomeScreen: React.FC = () => {
             colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={StyleSheet.absoluteFillObject}
           />
-
-          {/* Breaking badge */}
-          {item.isBreaking && (
-            <View style={styles.breakingBadge}>
-              <Text style={styles.breakingText}>BREAKING</Text>
-            </View>
-          )}
 
           {/* Tier badge — top right */}
           <View style={[styles.tierBadge, { backgroundColor: colors.accent }]}>
@@ -542,14 +531,6 @@ const styles = StyleSheet.create({
   // Card
   newsItem: { width },
   imageContainer: { width: '100%', overflow: 'hidden' },
-
-  // Breaking
-  breakingBadge: {
-    position: 'absolute', top: 14, left: 14,
-    backgroundColor: '#EF4444', borderRadius: 4,
-    paddingHorizontal: 10, paddingVertical: 4,
-  },
-  breakingText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
 
   // Tier
   tierBadge: {

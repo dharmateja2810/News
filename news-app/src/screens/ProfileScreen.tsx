@@ -114,19 +114,6 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.subSettings}>
               <View style={[styles.subMenuItem, { backgroundColor: colors.surface }]}>
                 <View style={styles.menuItemLeft}>
-                  <Ionicons name="flash-outline" size={20} color={colors.textSecondary} style={styles.subMenuIcon} />
-                  <Text style={[styles.subMenuText, { color: colors.text }]}>Breaking News</Text>
-                </View>
-                <Switch
-                  value={settings.breakingNews}
-                  onValueChange={(value) => updateSettings({ breakingNews: value })}
-                  trackColor={{ false: colors.border, true: colors.accent }}
-                  thumbColor="#fff"
-                />
-              </View>
-
-              <View style={[styles.subMenuItem, { backgroundColor: colors.surface }]}>
-                <View style={styles.menuItemLeft}>
                   <Ionicons name="newspaper-outline" size={20} color={colors.textSecondary} style={styles.subMenuIcon} />
                   <Text style={[styles.subMenuText, { color: colors.text }]}>Daily Digest</Text>
                 </View>

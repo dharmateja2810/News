@@ -21,7 +21,7 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from db import get_connection, dict_cursor
+from db import get_connection, dict_cursor, release_connection
 
 logger = logging.getLogger(__name__)
 
@@ -241,10 +241,10 @@ def run_clustering() -> dict:
             unassigned = [dict(r) for r in cur.fetchall()]
     except Exception as e:
         logger.error("Failed to fetch unassigned articles: %s", e)
-        conn.close()
+        release_connection(conn)
         return {"assigned": 0, "new_clusters": 0}
     finally:
-        conn.close()
+        release_connection(conn)
 
     if not unassigned:
         logger.info("No unassigned articles to cluster")
@@ -268,7 +268,7 @@ def run_clustering() -> dict:
             )
             rows = cur.fetchall()
     finally:
-        conn.close()
+        release_connection(conn)
 
     # Build cluster -> [articles] map
     cluster_articles: dict[str, list] = defaultdict(list)
@@ -338,7 +338,7 @@ def run_clustering() -> dict:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
     logger.info("Clustering complete: %d assigned, %d new cluster(s)", assigned, new_clusters)
     return {"assigned": assigned, "new_clusters": new_clusters}
@@ -364,7 +364,7 @@ def archive_old_clusters() -> int:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        release_connection(conn)
 
     if count:
         logger.info("Archived %d cluster(s) older than 48h", count)

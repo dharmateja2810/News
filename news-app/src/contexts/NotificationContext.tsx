@@ -31,7 +31,6 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<NotificationSettings>({
     enabled: false,
-    breakingNews: true,
     dailyDigest: true,
     savedArticleUpdates: false,
   });
