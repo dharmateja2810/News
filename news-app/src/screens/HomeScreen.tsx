@@ -298,7 +298,7 @@ export const HomeScreen: React.FC = () => {
           </Text>
 
           {/* Summary / explainer body */}
-          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 3 : 10}>
+          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 7 : 15}>
             {hasWhyMatters ? item.summary : (item.doubleClick || item.summary)}
           </Text>
 
