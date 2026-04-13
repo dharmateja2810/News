@@ -115,6 +115,9 @@ export class ArticlesService {
         take,
         orderBy: { publishedAt: 'desc' },
         include: {
+          cluster: {
+            include: { clusterContent: true },
+          },
           _count: {
             select: {
               likes: true,
@@ -150,6 +153,9 @@ export class ArticlesService {
     const article = await this.prisma.article.findUnique({
       where: { id },
       include: {
+        cluster: {
+          include: { clusterContent: true },
+        },
         _count: {
           select: {
             likes: true,

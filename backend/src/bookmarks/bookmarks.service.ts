@@ -45,6 +45,9 @@ export class BookmarksService {
       include: {
         article: {
           include: {
+            cluster: {
+              include: { clusterContent: true },
+            },
             _count: {
               select: {
                 likes: true,

@@ -20,6 +20,20 @@ export interface BackendArticle {
     likes: number;
     bookmarks: number;
   };
+  cluster?: {
+    id: string;
+    topic: string | null;
+    uniqueSourceCount: number;
+    articleCount: number;
+    clusterContent?: {
+      id: string;
+      headline: string;
+      summary: string;
+      whyItMatters: string | null;
+      doubleClick: string | null;
+      tier: number;
+    } | null;
+  } | null;
 }
 
 export interface ArticlesListResponse {
