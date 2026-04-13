@@ -21,11 +21,17 @@ export class FeedService {
       take: 50,
       include: {
         clusterContent: true,
+        articles: {
+          select: { id: true },
+          orderBy: { sourceAuthority: 'desc' },
+          take: 1,
+        },
       },
     });
 
     return clusters.map((cluster, index) => ({
       id: cluster.clusterContent!.id,
+      leadArticleId: cluster.articles[0]?.id || null,
       headline: cluster.clusterContent!.headline,
       summary: cluster.clusterContent!.summary,
       whyMatters: cluster.clusterContent!.whyItMatters || '',

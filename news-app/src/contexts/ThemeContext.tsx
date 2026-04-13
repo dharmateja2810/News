@@ -11,9 +11,12 @@ interface ThemeContextType {
   setThemeMode: (mode: 'light' | 'dark') => void;
   colors: {
     background: string;
+    backgroundTertiary: string;
     surface: string;
+    surfaceSecondary: string;
     text: string;
     textSecondary: string;
+    textTertiary: string;
     border: string;
     accent: string;
   };
@@ -21,18 +24,24 @@ interface ThemeContextType {
 
 const lightTheme = {
   background: '#ffffff',
+  backgroundTertiary: '#f0f0f0',
   surface: '#f5f6fa',
+  surfaceSecondary: '#eef0f4',
   text: '#1a1a2e',
   textSecondary: '#606060',
+  textTertiary: '#999999',
   border: '#e0e0e0',
   accent: '#0f4c75',
 };
 
 const darkTheme = {
   background: '#000000',
+  backgroundTertiary: '#2a2a2a',
   surface: '#1a1a1a',
+  surfaceSecondary: '#252525',
   text: '#ffffff',
   textSecondary: '#999999',
+  textTertiary: '#bbbbbb',
   border: '#333333',
   accent: '#0f4c75',
 };

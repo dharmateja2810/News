@@ -6,6 +6,7 @@ import { api } from './api';
 
 export interface FeedStory {
   id: string;
+  leadArticleId: string | null;
   headline: string;
   summary: string;
   whyMatters: string;

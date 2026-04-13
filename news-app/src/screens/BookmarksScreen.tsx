@@ -1,5 +1,5 @@
 /**
- * Bookmarks Screen — HomeScreen-style full-page cards for saved articles
+ * Bookmarks Screen — compact list with HomeScreen-style card detail modal
  */
 
 import React, { useEffect, useState, useRef } from 'react';
@@ -33,6 +33,7 @@ const { width } = Dimensions.get('window');
 
 interface CardItem {
   id: string;
+  articleId: string;
   headline: string;
   summary: string;
   whyMatters: string;
@@ -63,6 +64,7 @@ function articleToCard(a: BackendArticle): CardItem {
   if (cc) {
     return {
       id: a.id,
+      articleId: a.id,
       headline: cc.headline,
       summary: cc.summary,
       whyMatters: cc.whyItMatters || '',
@@ -78,6 +80,7 @@ function articleToCard(a: BackendArticle): CardItem {
   const sentences = (a.description || '').match(/[^.!?]+[.!?]+/g) || [];
   return {
     id: a.id,
+    articleId: a.id,
     headline: a.title,
     summary: sentences.slice(0, 3).join(' ').trim() || a.description?.slice(0, 300) || '',
     whyMatters: '',
@@ -95,15 +98,20 @@ const TIER_LABELS: Record<number, string> = { 1: 'DEEP DIVE', 2: 'STANDARD', 3: 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const BookmarksScreen: React.FC = () => {
-  const { savedArticleIds, toggleSave: handleSave, isSaved } = useSavedArticles();
+  const { toggleSave: handleSave, isSaved } = useSavedArticles();
   const { token } = useAuth();
   const { colors } = useTheme();
   const [likedArticles, setLikedArticles] = useState<Set<string>>(new Set());
   const lastTapRef = useRef<{ [key: string]: number }>({});
-  const listRef = useRef<FlatList<CardItem>>(null);
+  const detailListRef = useRef<FlatList<CardItem>>(null);
 
   const [cards, setCards] = useState<CardItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Detail modal state
+  const [showDetail, setShowDetail] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [pageHeight, setPageHeight] = useState(0);
   const imageHeight = Math.round(pageHeight * 0.32);
 
@@ -112,6 +120,7 @@ export const BookmarksScreen: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
 
+  // Load bookmarks on mount, token change, or manual refresh — NOT on savedArticleIds
   useEffect(() => {
     if (!token) {
       setCards([]);
@@ -133,7 +142,13 @@ export const BookmarksScreen: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [savedArticleIds, token]);
+  }, [token, refreshKey]);
+
+  // Refresh when detail modal closes (picks up any save/unsave changes)
+  const closeDetail = () => {
+    setShowDetail(false);
+    setRefreshKey((k) => k + 1);
+  };
 
   const handleLike = (id: string) => {
     setLikedArticles((prev) => {
@@ -141,6 +156,14 @@ export const BookmarksScreen: React.FC = () => {
       s.has(id) ? s.delete(id) : s.add(id);
       return s;
     });
+  };
+
+  const openDetailView = (index: number) => {
+    setSelectedIndex(index);
+    setShowDetail(true);
+    setTimeout(() => {
+      detailListRef.current?.scrollToIndex({ index, animated: false });
+    }, 100);
   };
 
   const openDoubleClick = async (item: CardItem) => {
@@ -180,11 +203,63 @@ export const BookmarksScreen: React.FC = () => {
     lastTapRef.current[item.id] = now;
   };
 
-  // ── Card renderer (same as HomeScreen) ──────────────────────────────────
+  const handleUnsave = async (articleId: string) => {
+    await handleSave(articleId);
+    // Remove from local cards immediately so the list updates without race
+    setCards((prev) => prev.filter((c) => c.articleId !== articleId));
+  };
+
+  // ── Compact list item ──────────────────────────────────────────────────
+
+  const renderListItem = ({ item, index }: { item: CardItem; index: number }) => {
+    const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
+    return (
+      <TouchableOpacity
+        style={[styles.listCard, { backgroundColor: colors.surface }]}
+        onPress={() => openDetailView(index)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.listCardBody}>
+          <View style={styles.listCardTop}>
+            <View style={[styles.listTierBadge, { backgroundColor: colors.accent }]}>
+              <Text style={styles.listTierText}>{tierLabel}</Text>
+            </View>
+            <Text style={[styles.listTime, { color: colors.textTertiary }]}>{item.time}</Text>
+          </View>
+          <Text style={[styles.listHeadline, { color: colors.text }]} numberOfLines={2}>
+            {item.headline}
+          </Text>
+          <Text style={[styles.listSummary, { color: colors.textSecondary }]} numberOfLines={2}>
+            {item.summary}
+          </Text>
+          <View style={styles.listMeta}>
+            <Text style={[styles.listCategory, { color: colors.accent }]}>{item.category.toUpperCase()}</Text>
+            {item.sourceCount > 1 && (
+              <>
+                <Text style={[styles.listDot, { color: colors.border }]}>•</Text>
+                <Text style={[styles.listSources, { color: colors.textTertiary }]}>{item.sourceCount} sources</Text>
+              </>
+            )}
+          </View>
+        </View>
+        <TouchableOpacity
+          style={styles.unsaveBtn}
+          onPress={(e) => {
+            e.stopPropagation();
+            void handleUnsave(item.articleId);
+          }}
+        >
+          <Ionicons name="bookmark" size={22} color={colors.accent} />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  // ── Full-page card renderer (HomeScreen style) ─────────────────────────
 
   const renderCard = ({ item }: { item: CardItem }) => {
-    const isLiked = likedArticles.has(item.id);
-    const saved = isSaved(item.id);
+    const isLiked = likedArticles.has(item.articleId);
+    const saved = isSaved(item.articleId);
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
     const hasWhyMatters = item.tier === 1 && item.whyMatters.length > 0;
 
@@ -240,10 +315,10 @@ export const BookmarksScreen: React.FC = () => {
               </TouchableOpacity>
             ) : <View />}
             <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.id)} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.articleId)} activeOpacity={0.7}>
                 <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textTertiary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.id)} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.articleId)} activeOpacity={0.7}>
                 <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? colors.accent : colors.textTertiary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.headline })} activeOpacity={0.7}>
@@ -256,9 +331,9 @@ export const BookmarksScreen: React.FC = () => {
     );
   };
 
-  // ── Double Click modal (same as HomeScreen) ─────────────────────────────
+  // ── Double Click modal ─────────────────────────────────────────────────
 
-  const renderDetailModal = () => {
+  const renderDoubleClickModal = () => {
     if (!detailVisible) return null;
     const story = detailStory;
     const catColor = colors.accent;
@@ -295,7 +370,7 @@ export const BookmarksScreen: React.FC = () => {
                   <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>{story.whyMatters}</Text>
                 </View>
               )}
-              <View style={[styles.doubleClickSection, { backgroundColor: colors.surfaceSecondary ?? colors.surface }]}>
+              <View style={[styles.doubleClickSection, { backgroundColor: colors.surfaceSecondary }]}>
                 <View style={styles.doubleClickHeader}>
                   <Ionicons name="layers" size={18} color={catColor} />
                   <Text style={[styles.doubleClickTitle, { color: colors.text }]}>The Full Story</Text>
@@ -324,7 +399,7 @@ export const BookmarksScreen: React.FC = () => {
     );
   };
 
-  // ── Empty / auth states ────────────────────────────────────────────────
+  // ── Empty / Auth states ────────────────────────────────────────────────
 
   if (!token) {
     return (
@@ -379,30 +454,65 @@ export const BookmarksScreen: React.FC = () => {
         </View>
       </SafeAreaView>
 
-      {/* Full-page paging cards */}
-      <View
-        style={styles.listArea}
-        onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0) setPageHeight(h); }}
-      >
-        {pageHeight === 0 ? (
-          <View style={styles.emptyState}><ActivityIndicator size="large" color={colors.accent} /></View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={cards}
-            renderItem={renderCard}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
-            pagingEnabled
-            showsVerticalScrollIndicator={false}
-            snapToInterval={pageHeight}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            getItemLayout={(_data, index) => ({ length: pageHeight, offset: pageHeight * index, index })}
-          />
-        )}
-      </View>
+      {/* Compact list */}
+      <FlatList
+        data={cards}
+        renderItem={renderListItem}
+        keyExtractor={(item, index) => `list-${item.id}-${index}`}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
 
-      {renderDetailModal()}
+      {/* Full-screen card detail modal */}
+      <Modal
+        visible={showDetail}
+        animationType="slide"
+        onRequestClose={closeDetail}
+      >
+        <View style={[styles.detailContainer, { backgroundColor: colors.background }]}>
+          {/* Close button */}
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={closeDetail}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          <View
+            style={styles.detailListArea}
+            onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0) setPageHeight(h); }}
+          >
+            {pageHeight === 0 ? (
+              <View style={styles.loadingCenter}><ActivityIndicator size="large" color={colors.accent} /></View>
+            ) : (
+              <FlatList
+                ref={detailListRef}
+                data={cards}
+                renderItem={renderCard}
+                keyExtractor={(item, index) => `detail-${item.id}-${index}`}
+                pagingEnabled
+                showsVerticalScrollIndicator={false}
+                snapToInterval={pageHeight}
+                snapToAlignment="start"
+                decelerationRate="fast"
+                initialScrollIndex={selectedIndex}
+                getItemLayout={(_, index) => ({
+                  length: pageHeight,
+                  offset: pageHeight * index,
+                  index,
+                })}
+                onScrollToIndexFailed={(info) => {
+                  setTimeout(() => {
+                    detailListRef.current?.scrollToIndex({ index: info.index, animated: false });
+                  }, 100);
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {renderDoubleClickModal()}
     </View>
   );
 };
@@ -414,9 +524,37 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
   headerTitle: { fontSize: 28, fontWeight: '800' },
   headerCount: { fontSize: 14, marginTop: 2 },
-  listArea: { flex: 1 },
 
-  // Card
+  // Compact list
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  listCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderRadius: 12, marginBottom: 10, padding: 14,
+  },
+  listCardBody: { flex: 1 },
+  listCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  listTierBadge: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  listTierText: { color: '#fff', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
+  listTime: { fontSize: 11, fontWeight: '500' },
+  listHeadline: { fontSize: 15, fontWeight: '700', lineHeight: 20, marginBottom: 4 },
+  listSummary: { fontSize: 13, lineHeight: 18, marginBottom: 8 },
+  listMeta: { flexDirection: 'row', alignItems: 'center' },
+  listCategory: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
+  listDot: { fontSize: 10, marginHorizontal: 6 },
+  listSources: { fontSize: 11 },
+  unsaveBtn: { padding: 8 },
+
+  // Detail modal
+  detailContainer: { flex: 1 },
+  closeButton: {
+    position: 'absolute', top: 50, left: 16, zIndex: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  detailListArea: { flex: 1 },
+
+  // Card (full-page)
   newsItem: { width },
   imageContainer: { width: '100%', overflow: 'hidden' },
   tierBadge: { position: 'absolute', top: 14, right: 14, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4 },
@@ -452,7 +590,7 @@ const styles = StyleSheet.create({
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   loadingText: { marginTop: 12, fontSize: 14 },
 
-  // Modal
+  // Double Click Modal
   modalContainer: { flex: 1 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
   modalCloseBtn: { padding: 4 },

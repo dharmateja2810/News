@@ -37,6 +37,7 @@ const CATEGORIES = [...NEWS_CATEGORIES];
 
 interface CardItem {
   id: string;
+  articleId: string;
   headline: string;
   summary: string;
   whyMatters: string;
@@ -55,6 +56,7 @@ interface CardItem {
 function feedStoryToCard(s: FeedStory): CardItem {
   return {
     id: s.id,
+    articleId: s.leadArticleId || s.id,
     headline: s.headline,
     summary: s.summary,
     whyMatters: s.whyMatters || '',
@@ -80,6 +82,7 @@ function articleToCard(a: UiArticle): CardItem {
     : a.description?.slice(0, 800) || '';
   return {
     id: a.id,
+    articleId: a.id,
     headline: a.title,
     summary,
     whyMatters,
@@ -244,8 +247,8 @@ export const HomeScreen: React.FC = () => {
   // ── Card renderer ─────────────────────────────────────────────────────────
 
   const renderCard = ({ item }: { item: CardItem }) => {
-    const isLiked = likedArticles.has(item.id);
-    const saved = isSaved(item.id);
+    const isLiked = likedArticles.has(item.articleId);
+    const saved = isSaved(item.articleId);
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
     const hasWhyMatters = item.tier === 1 && item.whyMatters.length > 0;
@@ -328,10 +331,10 @@ export const HomeScreen: React.FC = () => {
             )}
 
             <View style={styles.bottomActions}>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.id)} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => handleLike(item.articleId)} activeOpacity={0.7}>
                 <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={20} color={isLiked ? '#ef4444' : colors.textTertiary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.id)} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => void handleSave(item.articleId)} activeOpacity={0.7}>
                 <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={20} color={saved ? colors.accent : colors.textTertiary} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => void Share.share({ message: item.headline })} activeOpacity={0.7}>
