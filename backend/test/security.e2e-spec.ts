@@ -63,7 +63,7 @@ describe('Security (e2e)', () => {
         .send({
           title: xssPayload,
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: `https://example.com/xss-test-${Date.now()}`,
         })
         .expect(201);
@@ -213,7 +213,7 @@ describe('Security (e2e)', () => {
         .send({
           title: 'Test',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: 'https://example.com/test',
         })
         .expect(401);
@@ -226,7 +226,7 @@ describe('Security (e2e)', () => {
         .send({
           title: 'Test',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: 'https://example.com/test',
         })
         .expect(401);

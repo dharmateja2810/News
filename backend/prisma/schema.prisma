@@ -166,8 +166,11 @@ model ClusterContent {
   whyItMatters String?      @map("why_it_matters")
   doubleClick  String?      @map("double_click") @db.Text
   tier         Int
+  status       String       @default("pending") // pending | approved | rejected
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  @@index([status])
 
   @@map("cluster_content")
 }

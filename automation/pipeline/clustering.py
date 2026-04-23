@@ -121,7 +121,7 @@ def _create_cluster(conn, article: dict) -> str:
                unique_source_count, status)
             VALUES (%s, %s, %s, %s, %s, 1, 1, 'active')
             """,
-            (cluster_id, article["title"], article.get("category", "Business"), first_seen, now),
+            (cluster_id, article["title"], article.get("category", "Business & Companies"), first_seen, now),
         )
         cur.execute(
             "UPDATE articles SET cluster_id = %s WHERE id = %s",
@@ -181,7 +181,7 @@ def _update_cluster_metadata(conn, cluster_id: str) -> None:
     # Most common category
     cat_counts: dict[str, int] = defaultdict(int)
     for a in articles:
-        cat_counts[a.get("category") or "Business"] += 1
+        cat_counts[a.get("category") or "Business & Companies"] += 1
     top_category = max(cat_counts, key=cat_counts.get)
 
     cluster_quality = _calculate_cluster_quality(

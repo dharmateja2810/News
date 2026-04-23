@@ -8,14 +8,14 @@ async function main() {
 
   // Seed Categories
   const categories = [
-    { name: 'Technology', slug: 'technology' },
-    { name: 'Business', slug: 'business' },
-    { name: 'Sports', slug: 'sports' },
-    { name: 'Health', slug: 'health' },
-    { name: 'Science', slug: 'science' },
-    { name: 'Entertainment', slug: 'entertainment' },
-    { name: 'Politics', slug: 'politics' },
-    { name: 'World', slug: 'world' },
+    { name: 'Business & Companies', slug: 'business_companies' },
+    { name: 'Markets & Economy', slug: 'markets_economy' },
+    { name: 'Politics & Policy', slug: 'politics_policy' },
+    { name: 'World News', slug: 'world_news' },
+    { name: 'Tech & Innovation', slug: 'tech_innovation' },
+    { name: 'Property & Housing', slug: 'property_housing' },
+    { name: 'Employment & Wages', slug: 'employment_wages' },
+    { name: 'Lifestyle', slug: 'lifestyle_general' },
   ];
 
   for (const category of categories) {
@@ -88,7 +88,7 @@ async function main() {
         'Over the coming weeks, researchers plan to publish additional technical details, open evaluation datasets, and guidance for safe usage so organizations can measure impact and apply appropriate safeguards.',
       imageUrl: 'https://picsum.photos/seed/tech1/1080/720',
       source: 'TechCrunch',
-      category: 'Technology',
+      category: 'Tech & Innovation',
       author: 'John Smith',
       publishedAt: new Date('2026-01-18T10:00:00Z'),
       url: 'https://example.com/ai-breakthrough-2026',
@@ -103,7 +103,7 @@ async function main() {
         'Investors will be watching closely for revisions to forward guidance, additional inflation prints, and any signs of labor market softening that could alter the trajectory of rates and global growth forecasts.',
       imageUrl: 'https://picsum.photos/seed/business1/1080/720',
       source: 'Bloomberg',
-      category: 'Business',
+      category: 'Markets & Economy',
       author: 'Jane Doe',
       publishedAt: new Date('2026-01-18T08:00:00Z'),
       url: 'https://example.com/markets-rally-2026',
@@ -118,7 +118,7 @@ async function main() {
         'The celebration continues as fans mark a title many thought impossible, while analysts debate how this upset will reshape expectations for the league next season.',
       imageUrl: 'https://picsum.photos/seed/sports1/1080/720',
       source: 'ESPN',
-      category: 'Sports',
+      category: 'Lifestyle',
       author: 'Mike Johnson',
       publishedAt: new Date('2026-01-18T06:00:00Z'),
       url: 'https://example.com/championship-victory-2026',

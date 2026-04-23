@@ -12,22 +12,18 @@ interface Props {
 }
 
 const CATEGORY_THEMES: Record<string, { bg: string; accent: string; secondary: string }> = {
-  Markets: { bg: '#0F172A', accent: '#3B82F6', secondary: '#1E3A5F' },
-  Business: { bg: '#042F2E', accent: '#10B981', secondary: '#134E4A' },
-  Technology: { bg: '#1E1B4B', accent: '#8B5CF6', secondary: '#312E81' },
-  Politics: { bg: '#450A0A', accent: '#EF4444', secondary: '#7F1D1D' },
-  Sports: { bg: '#451A03', accent: '#F59E0B', secondary: '#78350F' },
-  Health: { bg: '#083344', accent: '#06B6D4', secondary: '#155E75' },
-  Science: { bg: '#1E1B4B', accent: '#6366F1', secondary: '#312E81' },
-  Entertainment: { bg: '#500724', accent: '#EC4899', secondary: '#831843' },
-  World: { bg: '#042F2E', accent: '#14B8A6', secondary: '#134E4A' },
-  Property: { bg: '#431407', accent: '#F97316', secondary: '#7C2D12' },
-  Employment: { bg: '#1A2E05', accent: '#84CC16', secondary: '#365314' },
-  Lifestyle: { bg: '#4A044E', accent: '#D946EF', secondary: '#701A75' },
+  'Business & Companies': { bg: '#042F2E', accent: '#10B981', secondary: '#134E4A' },
+  'Markets & Economy': { bg: '#0F172A', accent: '#3B82F6', secondary: '#1E3A5F' },
+  'Politics & Policy': { bg: '#450A0A', accent: '#EF4444', secondary: '#7F1D1D' },
+  'World News': { bg: '#042F2E', accent: '#14B8A6', secondary: '#134E4A' },
+  'Tech & Innovation': { bg: '#1E1B4B', accent: '#8B5CF6', secondary: '#312E81' },
+  'Property & Housing': { bg: '#431407', accent: '#F97316', secondary: '#7C2D12' },
+  'Employment & Wages': { bg: '#1A2E05', accent: '#84CC16', secondary: '#365314' },
+  'Lifestyle': { bg: '#4A044E', accent: '#D946EF', secondary: '#701A75' },
 };
 
 export const PlaceholderIllustration: React.FC<Props> = ({ width, height, category }) => {
-  const theme = CATEGORY_THEMES[category] ?? CATEGORY_THEMES.Markets;
+  const theme = CATEGORY_THEMES[category] ?? CATEGORY_THEMES['Business & Companies'];
 
   return (
     <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>

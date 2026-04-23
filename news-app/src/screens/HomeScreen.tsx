@@ -364,7 +364,7 @@ export const HomeScreen: React.FC = () => {
               <TouchableOpacity onPress={() => setDetailVisible(false)} style={styles.modalCloseBtn}>
                 <Ionicons name="chevron-down" size={28} color={colors.text} />
               </TouchableOpacity>
-              <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Double Click</Text>
+              <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>Read More</Text>
               <View style={{ width: 28 }} />
             </View>
           </SafeAreaView>
@@ -393,15 +393,7 @@ export const HomeScreen: React.FC = () => {
               {/* Summary */}
               <Text style={[styles.modalSummary, { color: colors.textSecondary }]}>{story.summary}</Text>
 
-              {/* Why it matters — only for Tier 1 */}
-              {story.tier === 1 && story.whyMatters && story.whyMatters.length > 0 && (
-                <View style={[styles.whyMattersBlock, { borderLeftColor: catColor }]}>
-                  <Text style={[styles.whyMattersLabel, { color: catColor }]}>WHY IT MATTERS</Text>
-                  <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>{story.whyMatters}</Text>
-                </View>
-              )}
-
-              {/* Double Click content */}
+              {/* Full Story content */}
               <View style={[styles.doubleClickSection, { backgroundColor: colors.surfaceSecondary ?? colors.surface }]}>
                 <View style={styles.doubleClickHeader}>
                   <Ionicons name="layers" size={18} color={catColor} />
@@ -409,25 +401,6 @@ export const HomeScreen: React.FC = () => {
                 </View>
                 <Text style={[styles.modalBodyText, { color: colors.text }]}>{story.doubleClick}</Text>
               </View>
-
-              {/* Sources list */}
-              {story.cluster?.articles && story.cluster.articles.length > 0 && (
-                <View style={styles.sourcesSection}>
-                  <Text style={[styles.sourcesTitle, { color: colors.textTertiary }]}>
-                    SOURCES ({story.cluster.articles.length})
-                  </Text>
-                  {story.cluster.articles.map((art) => (
-                    <View key={art.id} style={[styles.sourceItem, { borderBottomColor: colors.border }]}>
-                      <Text style={[styles.sourceItemTitle, { color: colors.text }]} numberOfLines={2}>
-                        {art.title}
-                      </Text>
-                      <Text style={[styles.sourceItemMeta, { color: colors.textTertiary }]}>
-                        {art.source}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
             </ScrollView>
           ) : (
             <View style={styles.loading}>

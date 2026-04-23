@@ -33,14 +33,14 @@ MAX_ARTICLES = int(os.getenv("MAX_ARTICLES", "30"))
 SUMMARY_SENTENCES = os.getenv("SUMMARY_SENTENCES", "8-10")
 MAX_WORKERS = int(os.getenv("MAX_WORKERS", "6"))
 ALLOWED_CATEGORIES = [
-    "Technology",
-    "Business",
-    "Sports",
-    "Health",
-    "Science",
-    "Entertainment",
-    "Politics",
-    "World",
+    "Business & Companies",
+    "Markets & Economy",
+    "Politics & Policy",
+    "World News",
+    "Tech & Innovation",
+    "Property & Housing",
+    "Employment & Wages",
+    "Lifestyle",
 ]
 
 
@@ -245,21 +245,23 @@ def classify_category_with_ollama(title: str, description: str, content: str) ->
     # Fallback heuristics if LLM fails
     text = f"{title} {description} {content}".lower()
     if re.search(r"\b(ai|chip|apple|google|microsoft|cyber|software|startup|tech)\b", text):
-        return "Technology"
-    if re.search(r"\b(stock|market|asx|profit|earnings|rates|bank|economy|inflation)\b", text):
-        return "Business"
-    if re.search(r"\b(match|league|tournament|championship|soccer|football|cricket|tennis)\b", text):
-        return "Sports"
-    if re.search(r"\b(health|hospital|cancer|vaccine|disease|medical)\b", text):
-        return "Health"
-    if re.search(r"\b(science|research|space|telescope|climate|biology|physics)\b", text):
-        return "Science"
-    if re.search(r"\b(movie|music|streaming|celebrity|entertainment)\b", text):
-        return "Entertainment"
-    if re.search(r"\b(election|government|parliament|policy|minister|politics)\b", text):
-        return "Politics"
+        return "Tech & Innovation"
+    if re.search(r"\b(stock|market|asx|rates|bank|economy|inflation|earnings|yield|rba)\b", text):
+        return "Markets & Economy"
+    if re.search(r"\b(company|corporate|merger|acquisition|ceo|revenue|profit|ipo|business)\b", text):
+        return "Business & Companies"
+    if re.search(r"\b(property|housing|rent|mortgage|real estate|auction|dwelling)\b", text):
+        return "Property & Housing"
+    if re.search(r"\b(employment|wages|jobs|hiring|unemployment|workforce|salary|labour)\b", text):
+        return "Employment & Wages"
+    if re.search(r"\b(election|government|parliament|policy|minister|politics|legislation)\b", text):
+        return "Politics & Policy"
+    if re.search(r"\b(war|international|global|foreign|united nations|nato|geopolitics)\b", text):
+        return "World News"
+    if re.search(r"\b(health|lifestyle|food|travel|entertainment|movie|music|sport)\b", text):
+        return "Lifestyle"
 
-    return "Business"
+    return "Business & Companies"
 
 
 def parse_article(url: str) -> Dict[str, str]:

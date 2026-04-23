@@ -74,20 +74,22 @@ def _derive_category(title: str, summary: str) -> str:
     text = f"{title} {summary}".lower()
 
     if re.search(r"\b(ai|machine learning|chip|apple|google|microsoft|cyber|software|startup|tech|quantum)\b", text):
-        return "Technology"
-    if re.search(r"\b(stock|market|asx|profit|earnings|rates|bank|economy|inflation|company|merger)\b", text):
-        return "Business"
-    if re.search(r"\b(match|league|tournament|championship|olympic|soccer|football|cricket|tennis)\b", text):
-        return "Sports"
-    if re.search(r"\b(health|hospital|cancer|vaccine|disease|medical|wellbeing)\b", text):
-        return "Health"
-    if re.search(r"\b(science|research|space|telescope|climate|biology|physics)\b", text):
-        return "Science"
-    if re.search(r"\b(movie|music|streaming|celebrity|entertainment)\b", text):
-        return "Entertainment"
-    if re.search(r"\b(election|government|parliament|policy|diplomatic|minister|politics)\b", text):
-        return "Politics"
-    return "Business"
+        return "Tech & Innovation"
+    if re.search(r"\b(stock|market|asx|rates|bank|economy|inflation|earnings|yield|rba|monetary)\b", text):
+        return "Markets & Economy"
+    if re.search(r"\b(company|corporate|merger|acquisition|ceo|revenue|profit|ipo|business)\b", text):
+        return "Business & Companies"
+    if re.search(r"\b(property|housing|rent|mortgage|real estate|auction|dwelling)\b", text):
+        return "Property & Housing"
+    if re.search(r"\b(employment|wages|jobs|hiring|unemployment|workforce|salary|labour|layoff)\b", text):
+        return "Employment & Wages"
+    if re.search(r"\b(election|government|parliament|policy|diplomatic|minister|politics|legislation)\b", text):
+        return "Politics & Policy"
+    if re.search(r"\b(war|international|global|foreign|united nations|nato|geopolitics|overseas)\b", text):
+        return "World News"
+    if re.search(r"\b(health|lifestyle|food|travel|entertainment|movie|music|sport|wellbeing)\b", text):
+        return "Lifestyle"
+    return "Business & Companies"
 
 
 def _passes_au_filter(title: str, summary: str) -> bool:
@@ -275,24 +277,7 @@ def _scrape_source(source: dict) -> int:
             except Exception as exc:
                 logger.debug("Content fetch failed: %s", exc)
 
-    # ── Phase 3: generate summaries in parallel ──────────────────────────
-    def _summarize_candidate(cand):
-        text = cand.get("full_content") or cand["rss_summary"]
-        if text:
-            cand["ai_summary"] = _summarize_with_openai(cand["title"], text)
-        else:
-            cand["ai_summary"] = ""
-        return cand
-
-    with ThreadPoolExecutor(max_workers=MAX_CONTENT_WORKERS) as executor:
-        futures = [executor.submit(_summarize_candidate, c) for c in candidates]
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as exc:
-                logger.debug("Summary generation failed: %s", exc)
-
-    # ── Phase 4: insert into DB ──────────────────────────────────────────
+    # ── Phase 3: insert into DB (summaries generated later) ────────────
     inserted = 0
     conn = get_connection()
     try:
@@ -304,12 +289,11 @@ def _scrape_source(source: dict) -> int:
                 author = cand["entry"].get("author") or None
 
                 full_content = cand.get("full_content") or None
-                ai_summary = cand.get("ai_summary") or None
-                # body = full article text, content = AI summary or full text,
-                # summary = AI summary
+                # summary will be generated in a separate pipeline stage
+                # body = full article text, content = full text or rss summary
                 body = full_content
-                content = ai_summary or full_content or cand["rss_summary"] or None
-                summary = ai_summary
+                content = full_content or cand["rss_summary"] or None
+                summary = None
 
                 now = datetime.now(timezone.utc)
                 with conn.cursor() as cur:

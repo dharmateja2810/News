@@ -25,24 +25,26 @@ const CARD_WIDTH = (width - 48) / 2;
 
 const CATEGORY_COLORS: Record<string, string[]> = {
   All: ['#667eea', '#764ba2'],
-  Technology: ['#3b82f6', '#1d4ed8'],
-  Business: ['#10b981', '#059669'],
-  Sports: ['#f59e0b', '#d97706'],
-  Entertainment: ['#ec4899', '#db2777'],
-  Health: ['#06b6d4', '#0891b2'],
-  Science: ['#8b5cf6', '#7c3aed'],
-  Politics: ['#ef4444', '#dc2626'],
+  'Business & Companies': ['#10b981', '#059669'],
+  'Markets & Economy': ['#3b82f6', '#1d4ed8'],
+  'Politics & Policy': ['#ef4444', '#dc2626'],
+  'World News': ['#14b8a6', '#0d9488'],
+  'Tech & Innovation': ['#8b5cf6', '#7c3aed'],
+  'Property & Housing': ['#f97316', '#ea580c'],
+  'Employment & Wages': ['#84cc16', '#65a30d'],
+  'Lifestyle': ['#d946ef', '#c026d3'],
 };
 
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   All: 'grid',
-  Technology: 'hardware-chip',
-  Business: 'briefcase',
-  Sports: 'football',
-  Entertainment: 'film',
-  Health: 'fitness',
-  Science: 'flask',
-  Politics: 'megaphone',
+  'Business & Companies': 'briefcase',
+  'Markets & Economy': 'trending-up',
+  'Politics & Policy': 'megaphone',
+  'World News': 'globe',
+  'Tech & Innovation': 'hardware-chip',
+  'Property & Housing': 'home',
+  'Employment & Wages': 'people',
+  'Lifestyle': 'cafe',
 };
 
 export const CategoriesScreen: React.FC = () => {

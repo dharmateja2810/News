@@ -74,18 +74,18 @@ describe('ArticlesController (e2e)', () => {
     });
 
     it('should filter articles by category', async () => {
-      await createTestArticle(prisma, { category: 'Technology' });
-      await createTestArticle(prisma, { category: 'Technology' });
-      await createTestArticle(prisma, { category: 'Business' });
+      await createTestArticle(prisma, { category: 'Tech & Innovation' });
+      await createTestArticle(prisma, { category: 'Tech & Innovation' });
+      await createTestArticle(prisma, { category: 'Markets & Economy' });
 
       const response = await request(app.getHttpServer())
         .get('/api/articles')
-        .query({ category: 'Technology' })
+        .query({ category: 'Tech & Innovation' })
         .expect(200);
 
       expect(response.body.items).toHaveLength(2);
       response.body.items.forEach((article: any) => {
-        expect(article.category).toBe('Technology');
+        expect(article.category).toBe('Tech & Innovation');
       });
     });
 
@@ -126,7 +126,7 @@ describe('ArticlesController (e2e)', () => {
         data: {
           title: 'Old Article',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: `https://example.com/old-${Date.now()}`,
           publishedAt: new Date('2024-01-01'),
         },
@@ -136,7 +136,7 @@ describe('ArticlesController (e2e)', () => {
         data: {
           title: 'New Article',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: `https://example.com/new-${Date.now()}`,
           publishedAt: new Date('2024-06-01'),
         },
@@ -179,18 +179,18 @@ describe('ArticlesController (e2e)', () => {
 
   describe('GET /api/articles/categories', () => {
     it('should return list of available categories', async () => {
-      await createTestArticle(prisma, { category: 'Technology' });
-      await createTestArticle(prisma, { category: 'Business' });
-      await createTestArticle(prisma, { category: 'Sports' });
+      await createTestArticle(prisma, { category: 'Tech & Innovation' });
+      await createTestArticle(prisma, { category: 'Markets & Economy' });
+      await createTestArticle(prisma, { category: 'Lifestyle' });
 
       const response = await request(app.getHttpServer())
         .get('/api/articles/categories')
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body).toContain('Technology');
-      expect(response.body).toContain('Business');
-      expect(response.body).toContain('Sports');
+      expect(response.body).toContain('Tech & Innovation');
+      expect(response.body).toContain('Markets & Economy');
+      expect(response.body).toContain('Lifestyle');
     });
   });
 
@@ -203,7 +203,7 @@ describe('ArticlesController (e2e)', () => {
         description: 'Article description',
         content: 'Full article content',
         source: 'AFR',
-        category: 'Business',
+        category: 'Business & Companies',
         url: `https://example.com/webhook-article-${Date.now()}`,
       };
 
@@ -221,7 +221,7 @@ describe('ArticlesController (e2e)', () => {
       const articleData = {
         title: 'Unauthorized Article',
         source: 'Test',
-        category: 'Technology',
+        category: 'Tech & Innovation',
         url: `https://example.com/unauthorized-${Date.now()}`,
       };
 
@@ -238,7 +238,7 @@ describe('ArticlesController (e2e)', () => {
         .send({
           title: 'Test',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url: `https://example.com/test-${Date.now()}`,
         })
         .expect(401);
@@ -254,7 +254,7 @@ describe('ArticlesController (e2e)', () => {
         .send({
           title: 'First Article',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url,
         })
         .expect(201);
@@ -266,7 +266,7 @@ describe('ArticlesController (e2e)', () => {
         .send({
           title: 'Duplicate Article',
           source: 'Test',
-          category: 'Technology',
+          category: 'Tech & Innovation',
           url,
         })
         .expect(409);
@@ -279,12 +279,12 @@ describe('ArticlesController (e2e)', () => {
         .send({
           title: 'Category Test',
           source: 'Test',
-          category: 'technology', // lowercase
+          category: 'tech & innovation', // lowercase
           url: `https://example.com/category-test-${Date.now()}`,
         })
         .expect(201);
 
-      expect(response.body.category).toBe('Technology'); // Should be normalized
+      expect(response.body.category).toBe('Tech & Innovation'); // Should be normalized
     });
 
     it('should validate required fields', async () => {

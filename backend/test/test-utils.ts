@@ -104,7 +104,7 @@ export async function createTestArticle(
       description: data.description || 'Test article description',
       content: data.content || 'Test article content',
       source: data.source || 'Test Source',
-      category: data.category || 'Technology',
+      category: data.category || 'Tech & Innovation',
       url: data.url || `https://example.com/article-${Date.now()}`,
     },
   });

@@ -61,7 +61,7 @@ CATEGORY_RULES = [
             r"bhp|rio tinto|woodside|wesfarmers|woolworths|cba|nab|anz|westpac|macquarie|telstra|qantas)\b",
             re.IGNORECASE,
         ),
-        "Business",
+        "Business & Companies",
     ),
     (
         re.compile(
@@ -69,7 +69,7 @@ CATEGORY_RULES = [
             r"inflation|gdp|recession|economy|economic|reserve bank|monetary policy|fiscal)\b",
             re.IGNORECASE,
         ),
-        "Business",
+        "Markets & Economy",
     ),
     (
         re.compile(
@@ -77,7 +77,7 @@ CATEGORY_RULES = [
             r"house price|home loan|corelogic|domain|realestate)\b",
             re.IGNORECASE,
         ),
-        "Business",
+        "Property & Housing",
     ),
     (
         re.compile(
@@ -85,7 +85,7 @@ CATEGORY_RULES = [
             r"policy|legislation|budget|senate|regulation|tax reform)\b",
             re.IGNORECASE,
         ),
-        "Politics",
+        "Politics & Policy",
     ),
     (
         re.compile(
@@ -93,7 +93,7 @@ CATEGORY_RULES = [
             r"israel|war|geopolitical|summit|diplomatic|trade war|sanctions)\b",
             re.IGNORECASE,
         ),
-        "World",
+        "World News",
     ),
     (
         re.compile(
@@ -101,7 +101,7 @@ CATEGORY_RULES = [
             r"chip|semiconductor|apple|google|microsoft|meta|amazon|openai)\b",
             re.IGNORECASE,
         ),
-        "Technology",
+        "Tech & Innovation",
     ),
     (
         re.compile(
@@ -109,7 +109,7 @@ CATEGORY_RULES = [
             r"fair work|union|industrial action|strike|work from home|remote work)\b",
             re.IGNORECASE,
         ),
-        "Business",
+        "Employment & Wages",
     ),
     (
         re.compile(
@@ -117,7 +117,7 @@ CATEGORY_RULES = [
             r"film|streaming|celebrity|restaurant)\b",
             re.IGNORECASE,
         ),
-        "Entertainment",
+        "Lifestyle",
     ),
 ]
 
@@ -194,7 +194,7 @@ def _detect_category(title: str, description: str) -> str:
     for pattern, category in CATEGORY_RULES:
         if pattern.search(text):
             return category
-    return "Business"
+    return "Business & Companies"
 
 
 def _extract_entities(title: str, description: str) -> dict:

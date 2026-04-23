@@ -52,13 +52,14 @@ export const APP_CONFIG = {
 
 export const NEWS_CATEGORIES = [
   'All',
-  'Technology',
-  'Business',
-  'Sports',
-  'Entertainment',
-  'Health',
-  'Science',
-  'Politics',
+  'Business & Companies',
+  'Markets & Economy',
+  'Politics & Policy',
+  'World News',
+  'Tech & Innovation',
+  'Property & Housing',
+  'Employment & Wages',
+  'Lifestyle',
 ] as const;
 
 export type NewsCategory = typeof NEWS_CATEGORIES[number];

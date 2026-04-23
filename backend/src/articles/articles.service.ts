@@ -20,14 +20,14 @@ export class ArticlesService {
 
   private normalizeCategory(input: string | undefined, textForHeuristics: string): string {
     const allowed = [
-      'Technology',
-      'Business',
-      'Sports',
-      'Health',
-      'Science',
-      'Entertainment',
-      'Politics',
-      'World',
+      'Business & Companies',
+      'Markets & Economy',
+      'Politics & Policy',
+      'World News',
+      'Tech & Innovation',
+      'Property & Housing',
+      'Employment & Wages',
+      'Lifestyle',
     ];
 
     const allowedMap = new Map(allowed.map((name) => [name.toLowerCase(), name]));
@@ -44,18 +44,23 @@ export class ArticlesService {
     const has = (re: RegExp) => re.test(t);
 
     if (has(/\b(ai|machine learning|chip|apple|google|microsoft|cyber|software|startup|tech|quantum)\b/))
-      return 'Technology';
-    if (has(/\b(stock|market|asx|profit|earnings|rates|bank|economy|inflation|company|merger)\b/))
-      return 'Business';
-    if (has(/\b(match|league|tournament|championship|olympic|soccer|football|cricket|tennis)\b/))
-      return 'Sports';
-    if (has(/\b(health|hospital|cancer|vaccine|disease|medical|wellbeing)\b/)) return 'Health';
-    if (has(/\b(science|research|space|telescope|climate|biology|physics)\b/)) return 'Science';
-    if (has(/\b(movie|music|streaming|celebrity|entertainment)\b/)) return 'Entertainment';
-    if (has(/\b(election|government|parliament|policy|diplomatic|minister|politics)\b/))
-      return 'Politics';
+      return 'Tech & Innovation';
+    if (has(/\b(stock|market|asx|rates|bank|economy|inflation|earnings|profit)\b/))
+      return 'Markets & Economy';
+    if (has(/\b(company|merger|acquisition|ceo|revenue|ipo|corporate|business)\b/))
+      return 'Business & Companies';
+    if (has(/\b(property|housing|rent|mortgage|real estate|auction|dwelling)\b/))
+      return 'Property & Housing';
+    if (has(/\b(employment|wages|jobs|hiring|unemployment|workforce|salary|labour)\b/))
+      return 'Employment & Wages';
+    if (has(/\b(election|government|parliament|policy|diplomatic|minister|politics|legislation)\b/))
+      return 'Politics & Policy';
+    if (has(/\b(war|international|global|foreign|united nations|nato|geopolitics|overseas)\b/))
+      return 'World News';
+    if (has(/\b(health|lifestyle|food|travel|entertainment|movie|music|sport|wellbeing)\b/))
+      return 'Lifestyle';
 
-    return 'Business';
+    return 'Business & Companies';
   }
 
   async create(createArticleDto: CreateArticleDto) {

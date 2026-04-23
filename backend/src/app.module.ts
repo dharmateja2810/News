@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { ArticlesModule } from './articles/articles.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { FeedModule } from './feed/feed.module';
+import { EditorModule } from './editor/editor.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './health/health.controller';
 
@@ -20,6 +21,7 @@ import { HealthController } from './health/health.controller';
     ArticlesModule,
     BookmarksModule,
     FeedModule,
+    EditorModule,
   ],
   controllers: [HealthController],
 })

@@ -15,7 +15,7 @@ export class FeedService {
     const clusters = await this.prisma.storyCluster.findMany({
       where: {
         status: 'active',
-        clusterContent: { isNot: null },
+        clusterContent: { is: { status: 'approved' } },
       },
       orderBy: { ozScore: 'desc' },
       take: 50,
@@ -36,7 +36,7 @@ export class FeedService {
       summary: cluster.clusterContent!.summary,
       whyMatters: cluster.clusterContent!.whyItMatters || '',
       doubleClick: cluster.clusterContent!.doubleClick || '',
-      category: cluster.category || 'Business',
+      category: cluster.category || 'Business & Companies',
       tier: cluster.clusterContent!.tier,
       feedRank: index + 1,
       illustrationId: null,
@@ -85,7 +85,7 @@ export class FeedService {
       summary: content.summary,
       whyMatters: content.whyItMatters || '',
       doubleClick: content.doubleClick || '',
-      category: content.cluster.category || 'Business',
+      category: content.cluster.category || 'Business & Companies',
       tier: content.tier,
       feedRank: null,
       illustrationId: null,
