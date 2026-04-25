@@ -308,7 +308,6 @@ export const HomeScreen: React.FC = () => {
           {/* Why it matters */}
           {hasWhyMatters && (
             <View style={[styles.whyMattersBlock, { borderLeftColor: colors.accent }]}>
-              <Text style={[styles.whyMattersLabel, { color: colors.accent }]}>WHY IT MATTERS</Text>
               <Text style={[styles.whyMattersText, { color: colors.textSecondary }]} numberOfLines={3}>
                 {item.whyMatters}
               </Text>
