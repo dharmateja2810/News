@@ -86,19 +86,23 @@ def _summarize_with_openai(title: str, content: str) -> str:
 
 
 def _get_unsummarised_articles(limit: int = BATCH_SIZE) -> list:
-    """Fetch articles that have body text but no AI summary yet."""
+    """Fetch articles in selected clusters (tier IS NOT NULL) that have
+    body text but no AI summary yet. This avoids wasting tokens on
+    articles that won't make it into the final feed."""
     conn = get_connection()
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
         with dict_cursor(conn) as cur:
             cur.execute(
                 """
-                SELECT id, title, body, description
-                FROM articles
-                WHERE summary IS NULL
-                  AND (body IS NOT NULL OR description IS NOT NULL)
-                  AND created_at > %s
-                ORDER BY created_at DESC
+                SELECT a.id, a.title, a.body, a.description
+                FROM articles a
+                JOIN story_clusters sc ON a.cluster_id = sc.id
+                WHERE a.summary IS NULL
+                  AND (a.body IS NOT NULL OR a.description IS NOT NULL)
+                  AND a.created_at > %s
+                  AND sc.tier IS NOT NULL
+                ORDER BY a.created_at DESC
                 LIMIT %s
                 """,
                 (cutoff, limit),

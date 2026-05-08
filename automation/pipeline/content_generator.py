@@ -1,8 +1,8 @@
-"""
-Content generator — assigns tiers to unprocessed clusters and generates
-AI content (headline, summary, why-it-matters, double-click) via explainer.
+"""Content generator -- generates AI content (headline, summary,
+why-it-matters, double-click) for clusters that have been selected
+and tiered by the selector stage.
 
-Pipeline step: runs after ozscore, before the feed is served.
+Pipeline step: runs after selector + summariser, before the feed is served.
 
 Usage:
     python content_generator.py [--limit N]
@@ -10,7 +10,6 @@ Usage:
 
 import argparse
 import logging
-import math
 
 from db import get_connection, dict_cursor, release_connection, close_pool
 from explainer import generate_for_cluster
@@ -26,20 +25,22 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_unprocessed_clusters(limit: int = 100) -> list:
+def _get_unprocessed_clusters(limit: int = 200) -> list:
     """
-    Return active clusters that have no cluster_content yet,
-    ordered by oz_score descending.
+    Return active clusters that have been selected (tier IS NOT NULL)
+    but have no cluster_content yet, ordered by oz_score descending.
+    Tiers are pre-assigned by the selector stage.
     """
     conn = get_connection()
     try:
         with dict_cursor(conn) as cur:
             cur.execute(
                 """
-                SELECT sc.id, sc.oz_score, sc.topic, sc.category
+                SELECT sc.id, sc.oz_score, sc.topic, sc.category, sc.tier
                 FROM story_clusters sc
                 LEFT JOIN cluster_content cc ON cc.cluster_id = sc.id
                 WHERE sc.status = 'active'
+                  AND sc.tier IS NOT NULL
                   AND cc.id IS NULL
                 ORDER BY sc.oz_score DESC
                 LIMIT %s
@@ -49,39 +50,6 @@ def _get_unprocessed_clusters(limit: int = 100) -> list:
             return [dict(r) for r in cur.fetchall()]
     finally:
         release_connection(conn)
-
-
-def _assign_tiers(clusters: list) -> list:
-    """
-    Assign tiers based on percentile position:
-      Top 25%    → Tier 1
-      Next 35%   → Tier 2
-      Bottom 40% → Tier 3
-    Clusters are assumed to be sorted by oz_score DESC.
-    """
-    n = len(clusters)
-    if n == 0:
-        return clusters
-
-    t1_cutoff = max(1, math.ceil(n * 0.25))
-    t2_cutoff = max(t1_cutoff + 1, math.ceil(n * 0.60))
-
-    for i, c in enumerate(clusters):
-        if i < t1_cutoff:
-            c["tier"] = 1
-        elif i < t2_cutoff:
-            c["tier"] = 2
-        else:
-            c["tier"] = 3
-
-    tier_counts = {1: 0, 2: 0, 3: 0}
-    for c in clusters:
-        tier_counts[c["tier"]] += 1
-    logger.info(
-        "Tier assignment: T1=%d, T2=%d, T3=%d (total %d)",
-        tier_counts[1], tier_counts[2], tier_counts[3], n,
-    )
-    return clusters
 
 
 def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
@@ -130,19 +98,25 @@ def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def generate_content(limit: int = 100) -> int:
+def generate_content(limit: int = 200) -> int:
     """
-    Fetch unprocessed clusters, assign tiers, generate AI content
-    sequentially, and write to cluster_content.
+    Fetch selected clusters (tier already assigned by selector stage),
+    generate AI content sequentially, and write to cluster_content.
 
     Returns the number of clusters processed.
     """
     clusters = _get_unprocessed_clusters(limit)
     if not clusters:
-        logger.info("No unprocessed clusters found")
+        logger.info("No selected clusters need content generation")
         return 0
 
-    clusters = _assign_tiers(clusters)
+    tier_counts = {1: 0, 2: 0, 3: 0}
+    for c in clusters:
+        tier_counts[c["tier"]] += 1
+    logger.info(
+        "Generating content for %d clusters (T1=%d, T2=%d, T3=%d)",
+        len(clusters), tier_counts[1], tier_counts[2], tier_counts[3],
+    )
     processed = 0
 
     for c in clusters:

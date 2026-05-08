@@ -163,9 +163,9 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
             f"7. What to watch\n\nDo not label these sections. Write as continuous prose."
         )
     elif tier == 2:
-        tokens = 700
+        tokens = 900
         user = (
-            f"Write a Tier 2 OzShorts Double Click explainer. Target: 300–400 words.\n\n"
+            f"Write a Tier 2 OzShorts Double Click explainer. Target: 300–500 words.\n\n"
             f"STORY CLUSTER:\nHeadline: {meta['headline']}\n\n"
             f"SOURCE FACTS (use these — do not invent figures):\n{facts}\n\n"
             f"STRUCTURE TO FOLLOW:\n"
@@ -176,17 +176,18 @@ def _generate_explainer_body(meta: dict, facts: str, tier: int) -> str:
             f"Do not label these sections. Write as continuous prose."
         )
     else:
-        tokens = 400
+        tokens = 500
         user = (
-            f"Write a Tier 3 OzShorts Double Click explainer. Target: 150–200 words.\n\n"
+            f"Write a Tier 3 OzShorts Double Click factual expansion. Target: ~200 words.\n\n"
             f"STORY CLUSTER:\nHeadline: {meta['headline']}\n\n"
             f"SOURCE FACTS:\n{facts}\n\n"
-            f"STRUCTURE TO FOLLOW:\n"
-            f"1. State what happened, clearly and directly\n"
-            f"2. Add one layer of factual context the short card did not include\n"
-            f"3. One sentence on what this means for Australian businesses or consumers\n\n"
-            f"Do not editorialize. Do not speculate. Facts only. "
-            f"Do not label these sections. Write as continuous prose."
+            f"RULES:\n"
+            f"- State what happened, clearly and directly\n"
+            f"- Add one layer of factual context the short card did not include\n"
+            f"- No narrative structure. No Australian angle framing. Just the core facts\n"
+            f"  expanded slightly beyond the card summary.\n"
+            f"- Do not editorialize. Do not speculate. Facts only.\n\n"
+            f"Write as continuous prose. No labels or bullet points."
         )
 
     return _call_llm(system, user, max_tokens=tokens)
@@ -214,7 +215,7 @@ def _run_guardrails(content: str, facts: str, tier: int) -> dict:
 
     # 1. Word count
     word_count = len(content.split())
-    ranges = {1: (500, 600), 2: (300, 400), 3: (150, 200)}
+    ranges = {1: (500, 600), 2: (300, 500), 3: (150, 250)}
     min_w, max_w = ranges.get(tier, (150, 600))
     if word_count < min_w or word_count > max_w:
         flags.append(f"word-count-out-of-range: {word_count} words (target {min_w}–{max_w})")
@@ -321,16 +322,12 @@ def generate_for_cluster(cluster_id: str, tier: int) -> dict:
     logger.info("Cluster %s: generating card summary (word_limit=%d)...", cluster_id, word_limit)
     card_summary = _generate_card_summary(cluster_summary, facts, word_limit)
 
-    # Only Tier 1 gets a full explainer body + guardrails
-    if tier == 1:
-        logger.info("Cluster %s: writing explainer body (tier 1)...", cluster_id)
-        explainer_body = _generate_explainer_body(meta, facts, tier)
-        guardrail = _run_guardrails(explainer_body, facts, tier)
-        if guardrail["flags"]:
-            logger.warning("Cluster %s guardrail flags: %s", cluster_id, guardrail["flags"])
-    else:
-        explainer_body = ""
-        guardrail = {"flags": [], "should_reject": False}
+    # Generate explainer body for all tiers
+    logger.info("Cluster %s: writing explainer body (tier %d)...", cluster_id, tier)
+    explainer_body = _generate_explainer_body(meta, facts, tier)
+    guardrail = _run_guardrails(explainer_body, facts, tier)
+    if guardrail["flags"]:
+        logger.warning("Cluster %s guardrail flags: %s", cluster_id, guardrail["flags"])
 
     return {
         "headline": meta["headline"],

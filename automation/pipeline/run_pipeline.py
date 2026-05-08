@@ -2,18 +2,19 @@
 Pipeline orchestrator — runs all pipeline stages in sequence.
 
 Usage:
-  python run_pipeline.py              # full pipeline (scrape → summarise → normalise → dedup → cluster → score → content)
+  python run_pipeline.py              # full pipeline (scrape → normalise → dedup → cluster → score → select → summarise → content)
   python run_pipeline.py --scrape     # only scrape
-  python run_pipeline.py --summarise  # only AI summarisation (rate-limited)
   python run_pipeline.py --normalise  # only normalise
   python run_pipeline.py --dedup      # only dedup
   python run_pipeline.py --cluster    # only cluster + archive
   python run_pipeline.py --score      # only score
-  python run_pipeline.py --content    # only content generation (tier assignment + AI)
+  python run_pipeline.py --select     # only category selection + tier assignment
+  python run_pipeline.py --summarise  # only AI summarisation (selected clusters only)
+  python run_pipeline.py --content    # only content generation
 
 Cron examples:
-  */15 * * * * cd /path/to/pipeline && python run_pipeline.py --scrape --summarise --normalise
-  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score --content
+  */15 * * * * cd /path/to/pipeline && python run_pipeline.py --scrape --normalise
+  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score --select --summarise --content
   0 */6 * * *  cd /path/to/pipeline && python run_pipeline.py   # full pass every 6h
 """
 
@@ -45,17 +46,8 @@ def run_scrape():
     return total
 
 
-def run_summarise():
-    logger.info("=== STAGE 2: AI Summarisation ===")
-    from summariser import summarise_articles
-    t0 = time.time()
-    n = summarise_articles()
-    logger.info("Summarise complete in %.1fs — %d articles summarised", time.time() - t0, n)
-    return n
-
-
 def run_normalise():
-    logger.info("=== STAGE 3: Normalising ===")
+    logger.info("=== STAGE 2: Normalising ===")
     from normaliser import process_unprocessed
     t0 = time.time()
     n = process_unprocessed()
@@ -64,7 +56,7 @@ def run_normalise():
 
 
 def run_dedup():
-    logger.info("=== STAGE 4: Deduplication ===")
+    logger.info("=== STAGE 3: Deduplication ===")
     from dedup import run_dedup as _run_dedup
     t0 = time.time()
     result = _run_dedup()
@@ -76,7 +68,7 @@ def run_dedup():
 
 
 def run_cluster():
-    logger.info("=== STAGE 5: Clustering ===")
+    logger.info("=== STAGE 4: Clustering ===")
     from clustering import run_clustering, archive_old_clusters
     t0 = time.time()
     result = run_clustering()
@@ -89,7 +81,7 @@ def run_cluster():
 
 
 def run_score():
-    logger.info("=== STAGE 6: OzScore ===")
+    logger.info("=== STAGE 5: OzScore ===")
     from ozscore import score_all_active
     t0 = time.time()
     n = score_all_active()
@@ -97,8 +89,31 @@ def run_score():
     return n
 
 
+def run_select():
+    logger.info("=== STAGE 6: Category Selection + Tiering ===")
+    from selector import select_stories
+    t0 = time.time()
+    result = select_stories()
+    logger.info(
+        "Selection complete in %.1fs — %d clusters selected (T1=%d, T2=%d, T3=%d)",
+        time.time() - t0,
+        result["selected"],
+        result["tiers"][1], result["tiers"][2], result["tiers"][3],
+    )
+    return result
+
+
+def run_summarise():
+    logger.info("=== STAGE 7: AI Summarisation (selected clusters only) ===")
+    from summariser import summarise_articles
+    t0 = time.time()
+    n = summarise_articles()
+    logger.info("Summarise complete in %.1fs — %d articles summarised", time.time() - t0, n)
+    return n
+
+
 def run_content():
-    logger.info("=== STAGE 7: Content Generation ===")
+    logger.info("=== STAGE 8: Content Generation ===")
     from content_generator import generate_content
     t0 = time.time()
     n = generate_content()
@@ -109,17 +124,19 @@ def run_content():
 def main():
     parser = argparse.ArgumentParser(description="OzShorts pipeline runner")
     parser.add_argument("--scrape",    action="store_true", help="Run scrape stage")
-    parser.add_argument("--summarise", action="store_true", help="Run AI summarisation stage")
     parser.add_argument("--normalise", action="store_true", help="Run normalise stage")
     parser.add_argument("--dedup",     action="store_true", help="Run dedup stage")
     parser.add_argument("--cluster",   action="store_true", help="Run clustering stage")
     parser.add_argument("--score",     action="store_true", help="Run scoring stage")
+    parser.add_argument("--select",    action="store_true", help="Run category selection + tier assignment")
+    parser.add_argument("--summarise", action="store_true", help="Run AI summarisation (selected clusters only)")
     parser.add_argument("--content",   action="store_true", help="Run content generation stage")
     args = parser.parse_args()
 
     run_all = not any([
-        args.scrape, args.summarise, args.normalise, args.dedup,
-        args.cluster, args.score, args.content,
+        args.scrape, args.normalise, args.dedup,
+        args.cluster, args.score, args.select,
+        args.summarise, args.content,
     ])
 
     t_start = time.time()
@@ -128,8 +145,6 @@ def main():
     try:
         if run_all or args.scrape:
             run_scrape()
-        if run_all or args.summarise:
-            run_summarise()
         if run_all or args.normalise:
             run_normalise()
         if run_all or args.dedup:
@@ -138,6 +153,10 @@ def main():
             run_cluster()
         if run_all or args.score:
             run_score()
+        if run_all or args.select:
+            run_select()
+        if run_all or args.summarise:
+            run_summarise()
         if run_all or args.content:
             run_content()
     except Exception as exc:

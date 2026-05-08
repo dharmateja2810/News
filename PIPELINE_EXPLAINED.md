@@ -10,13 +10,14 @@ and categorised story cards you see in the app.
 
 1. [The Big Picture](#the-big-picture)
 2. [Stage 1 — Scraping](#stage-1--scraping)
-3. [Stage 2 — AI Summarisation](#stage-2--ai-summarisation)
-4. [Stage 3 — Normalisation](#stage-3--normalisation)
-5. [Stage 4 — Deduplication](#stage-4--deduplication)
-6. [Stage 5 — Clustering](#stage-5--clustering)
-7. [Stage 6 — OzScore](#stage-6--ozscore)
-8. [Stage 7 — Content Generation](#stage-7--content-generation)
-9. [End-to-End Example](#end-to-end-example)
+3. [Stage 2 — Normalisation](#stage-2--normalisation)
+4. [Stage 3 — Deduplication](#stage-3--deduplication)
+5. [Stage 4 — Clustering](#stage-4--clustering)
+6. [Stage 5 — OzScore](#stage-5--ozscore)
+7. [Stage 6 — Category Selection + Tiering](#stage-6--category-selection--tiering)
+8. [Stage 7 — AI Summarisation](#stage-7--ai-summarisation)
+9. [Stage 8 — Content Generation](#stage-8--content-generation)
+10. [End-to-End Example](#end-to-end-example)
 
 ---
 
@@ -25,11 +26,15 @@ and categorised story cards you see in the app.
 Think of the pipeline like a newsroom assembly line:
 
 ```
-Raw News ─→ Scrape ─→ Summarise ─→ Clean Up ─→ Remove Duplicates ─→ Group by Story ─→ Score ─→ Write Final Content
+Raw News ─→ Scrape ─→ Clean Up ─→ Remove Duplicates ─→ Group by Story ─→ Score ─→ Select Top ~105 ─→ Summarise ─→ Write Final Content
 ```
 
 Each stage does one job and passes its output to the next stage. You can run
 the full pipeline end-to-end, or run individual stages on their own.
+
+**Key design decision:** AI summarisation happens *after* story selection, not before.
+This means we only spend AI tokens on the ~300–400 articles that belong to selected
+clusters, rather than all ~1000 scraped articles. This saves 60–70% of API costs.
 
 ---
 
@@ -61,29 +66,7 @@ in deduplication and scoring to prefer more reliable sources.
 
 ---
 
-## Stage 2 — AI Summarisation
-
-**What it does:** Takes articles that have full body text but no summary yet, and asks
-an AI (OpenAI GPT-4o) to write a concise 8–10 sentence summary of each one.
-
-### How it works
-
-1. Finds all articles from the last 72 hours that have body text but no summary.
-2. Processes them **one at a time** (not in parallel) to avoid hitting API rate limits.
-3. For each article, sends the title and body text to GPT-4o with the instruction:
-   *"Summarise the article in 8–10 sentences. Be neutral, factual, concise."*
-4. Saves the AI-generated summary back onto the article in the database.
-5. Waits **1 second** between each call to stay within API rate limits.
-
-### Rate limiting and retries
-
-- If the AI service returns a rate-limit error (HTTP 429), the system retries up to
-  **3 times** with increasing wait times (5s, 10s, 15s) between attempts.
-- Articles are processed in batches of up to **50 at a time**.
-
----
-
-## Stage 3 — Normalisation
+## Stage 2 — Normalisation
 
 **What it does:** Cleans up raw article data and enriches it with structured metadata.
 Think of this as the "quality control" step — it standardises messy scraped data into
@@ -157,7 +140,7 @@ and clustering.
 
 ---
 
-## Stage 4 — Deduplication
+## Stage 3 — Deduplication
 
 **What it does:** Finds and removes duplicate articles so the same news story doesn't
 appear multiple times. Uses two different methods to catch duplicates.
@@ -222,7 +205,7 @@ invisible to the rest of the pipeline.
 
 ---
 
-## Stage 5 — Clustering
+## Stage 4 — Clustering
 
 **What it does:** Groups related articles about the same topic/event into **story clusters**.
 Instead of showing 5 separate articles about the RBA holding rates, the app shows
@@ -295,7 +278,7 @@ generation stages.
 
 ---
 
-## Stage 6 — OzScore
+## Stage 5 — OzScore
 
 **What it does:** Calculates a single importance score (0.0 to 1.0) for each story
 cluster. This score determines the order stories appear in the feed and which
@@ -520,26 +503,109 @@ A story will score below **0.3** (Tier 3 or not shown) when it has most of these
 
 ---
 
-## Stage 7 — Content Generation
+## Stage 6 — Category Selection + Tiering
 
-**What it does:** Takes scored clusters and produces the final editorial content
-that users see in the app — headlines, summaries, explainer articles, and
-"why it matters" text.
+**What it does:** After OzScore is calculated for all clusters, this stage selects
+the **top ~105 stories** using per-category quotas to guarantee a balanced feed,
+then assigns fixed tier counts.
 
-### Step 1: Tier Assignment
+### Why category quotas?
 
-Clusters are sorted by OzScore (highest first) and split into three tiers based
-on their percentile position:
+Without quotas, a single breaking topic (e.g. an election or a market crash) could
+dominate all available slots. Category quotas ensure readers always get variety across
+business, markets, politics, world news, and lifestyle.
 
-| Tier | Percentile | Meaning | Content produced |
-|------|------------|---------|-----------------|
-| **Tier 1** | Top 25% | The most important stories today | Headline + card summary (50 words) + "Why it matters" + full explainer (500–600 words) |
-| **Tier 2** | Next 35% | Important but not critical | Headline + card summary (100 words) |
-| **Tier 3** | Bottom 40% | Worth knowing about | Headline + card summary (100 words) |
+### Category quotas
 
-### Step 2: AI Content Generation (4 LLM Calls per Cluster)
+For each category, take the **top-N clusters by OzScore** within that category:
 
-For each cluster, the system makes up to **4 calls to OpenAI GPT-4o**:
+| Category | Stories Selected |
+|----------|------------------|
+| Business & Companies | 25 |
+| Markets & Economy | 20 |
+| Politics & Policy | 20 |
+| World News | 15 |
+| Tech & Innovation | 10 |
+| Property & Housing (includes Employment & Wages) | 10 |
+| Lifestyle | 5 |
+| **Total** | **105** |
+
+### Overflow handling
+
+If a category has fewer clusters than its quota (e.g. only 3 Lifestyle clusters
+exist but the quota is 5), the unused slots are filled from the **next-highest
+scoring clusters globally** across all categories. This ensures we always output
+as close to 105 stories as possible.
+
+### Tier assignment (fixed counts)
+
+The selected 105 clusters are sorted by OzScore (highest first) and assigned tiers
+using **fixed story counts** (not percentiles):
+
+| Tier | Label | Stories | Criteria |
+|------|-------|---------|----------|
+| **Tier 1** | Deep Narrative | 22 (~20%) | M&A / deals, RBA / macro / policy, major company strategy, 3+ sources, high OzScore |
+| **Tier 2** | Context | 42 (~40%) | Earnings updates, sector movements, mid-level policy, 2+ sources |
+| **Tier 3** | Minimal | 41 (~40%) | Minor updates, single source, low impact |
+
+Tiers are written to the `story_clusters` table. Only clusters with a tier assigned
+will proceed to summarisation and content generation.
+
+---
+
+## Stage 7 — AI Summarisation
+
+**What it does:** Takes articles that belong to **selected clusters** (tier assigned)
+and generates AI summaries. Because this runs *after* selection, it only summarises
+articles in the ~105 chosen clusters — not all ~1000 scraped articles.
+
+### How it works
+
+1. Finds articles from the last 72 hours that:
+   - Have body text but no summary
+   - Belong to a cluster that has a tier assigned (`tier IS NOT NULL`)
+2. Processes them **one at a time** to avoid hitting API rate limits.
+3. For each article, sends the title and body text to GPT-4o with the instruction:
+   *"Summarise the article in 8–10 sentences. Be neutral, factual, concise."*
+4. Saves the AI-generated summary back onto the article in the database.
+5. Waits **1 second** between each call to stay within API rate limits.
+
+### Rate limiting and retries
+
+- If the AI service returns a rate-limit error (HTTP 429), the system retries up to
+  **3 times** with increasing wait times (5s, 10s, 15s) between attempts.
+- Articles are processed in batches of up to **50 at a time**.
+
+### Why summarise after selection?
+
+Previously, all articles were summarised immediately after scraping. This wasted
+60–70% of AI tokens on articles that would never appear in the feed. By moving
+summarisation after selection, we only spend tokens on articles that matter.
+
+---
+
+## Stage 8 — Content Generation
+
+**What it does:** Takes the selected and tiered clusters and produces the final
+editorial content that users see in the app — headlines, summaries, explainer
+articles, and "why it matters" text.
+
+### Tier assignment
+
+Tiers are pre-assigned by the selector stage (Stage 6). Content generation reads
+the tier from the database — it does not calculate tiers itself.
+
+### Content produced per tier
+
+| Tier | Headline | Card Summary | Why It Matters | Double Click Explainer |
+|------|----------|--------------|----------------|------------------------|
+| **Tier 1** | ✅ (max 12 words) | ✅ (max 50 words) | ✅ (max 20 words) | ✅ 500–600 words — full narrative |
+| **Tier 2** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ 300–500 words — structured context |
+| **Tier 3** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ ~200 words — factual expansion only |
+
+### AI Content Generation (4 LLM Calls per Cluster)
+
+For each cluster, the system makes **4 calls to OpenAI GPT-4o**:
 
 #### Call 1: Fact Extraction
 
@@ -566,17 +632,19 @@ A short paragraph for the feed card:
 - Tier 1: max 50 words
 - Tier 2/3: max 100 words
 
-#### Call 4: Double Click Explainer (Tier 1 Only)
+#### Call 4: Double Click Explainer (All Tiers)
 
+All tiers now receive a Double Click explainer, at different depths:
+
+**Tier 1 — Full Narrative (500–600 words):**
 A full explainer article written in OzShorts' signature style (inspired by Finshots):
 - Conversational and clear
 - Written like explaining to a smart friend
 - Short paragraphs, one idea each
 - Active voice, plain English
 - Ends with a "what to watch" observation, not a conclusion
-- **500–600 words** for Tier 1
 
-The explainer follows this structure:
+The Tier 1 explainer follows this 7-part structure:
 1. Hook — the event, then zoom out to the bigger picture
 2. What happened — core facts
 3. Why this entity did what it did
@@ -585,13 +653,24 @@ The explainer follows this structure:
 6. Australian impact
 7. What to watch
 
-### Step 3: Guardrails
+**Tier 2 — Structured Context (300–500 words):**
+Shorter explainer covering:
+1. Open with the news, then immediately explain the 'so what'
+2. Key context a reader needs
+3. Who this affects in Australia and how
+4. One forward-looking signal — what to watch
 
-Before saving Tier 1 content, it passes through automated quality checks:
+**Tier 3 — Factual Expansion (~200 words):**
+Brief factual summary only. No narrative structure, no Australian angle framing.
+Just the core facts expanded slightly beyond the card summary.
+
+### Guardrails
+
+Before saving content, all tiers pass through automated quality checks:
 
 | Check | What it catches |
 |-------|-----------------|
-| **Word count** | Must be within the target range for the tier |
+| **Word count** | Must be within the target range for the tier (T1: 500–600, T2: 300–500, T3: 150–250) |
 | **Forbidden openers** | Sentences must not start with "However", "Furthermore", "In conclusion" |
 | **Forbidden phrases** | Blocks cliché phrases: "It is worth noting", "Experts say", "It remains to be seen" |
 | **Passive voice** | Flags if more than 15% of sentences use passive voice |
@@ -601,7 +680,7 @@ Before saving Tier 1 content, it passes through automated quality checks:
 If an ungrounded figure is found (a number the AI made up), the entire piece is
 **rejected** and won't be published.
 
-### Step 4: Save to Database
+### Save to Database
 
 The generated content is saved to the `cluster_content` table with status **"pending"**,
 meaning it needs editor approval before appearing in the app.
@@ -624,12 +703,7 @@ AFR also has a similar article:
 
 Saved with source authority 0.85.
 
-### 2. AI Summarisation
-
-Both articles get an 8–10 sentence AI summary generated by GPT-4o, capturing the
-key facts, context, and quotes from each article.
-
-### 3. Normalisation
+### 2. Normalisation
 
 **ABC article after normalisation:**
 - Title cleaned: `"Reserve Bank of Australia Cuts Cash Rate to 3.85%"` (removed "— ABC News")
@@ -644,7 +718,7 @@ key facts, context, and quotes from each article.
 - Entities: `{orgs: ["RBA"], gpes: ["Australia"], persons: []}`
 - Dedup hash: `"rba delivers first rate cut in four years as inflation eases"`
 
-### 4. Deduplication
+### 3. Deduplication
 
 - **Hash check:** Different dedup hashes → not hash-duplicates.
 - **Title similarity:**
@@ -655,7 +729,7 @@ key facts, context, and quotes from each article.
 
 Both articles survive dedup.
 
-### 5. Clustering
+### 4. Clustering
 
 - ABC article is processed first. No existing cluster matches → **new cluster created**.
 - AFR article is compared to the new cluster:
@@ -674,14 +748,26 @@ titles — the cluster grows to 6 articles.
 - Category: Markets & Economy
 - Cluster quality: 0.87 (high — multiple sources, no opinion, includes Reuters)
 
-### 6. OzScore
+### 5. OzScore
 
 Using the worked example from the OzScore section above:
 **Final OzScore = 0.901** (very high).
 
-### 7. Content Generation
+### 7. Category Selection + Tiering
 
-- **Tier assignment:** With a 0.901 score, this is in the **top 25%** → **Tier 1**.
+- The cluster's category is "Markets & Economy" (quota: 20 slots).
+- With a 0.901 score, it's the highest-scoring cluster in its category → **selected**.
+- Among all 105 selected clusters, it ranks in the top 22 → **Tier 1**.
+
+### 8. AI Summarisation
+
+- Now that the cluster is selected, its 6 articles get AI summaries generated
+  (8–10 sentences each). Only these articles are summarised — not the hundreds
+  of other scraped articles that didn't make the cut.
+
+### 9. Content Generation
+
+- **Tier already assigned:** Tier 1 (from the selector stage).
 - **Fact extraction:** The AI extracts: "Cash rate cut from 4.10% to 3.85%",
   "First cut since November 2020", "Michele Bullock cited falling inflation", etc.
 - **Headline generated:** `"RBA Cuts Rates to 3.85% in First Reduction Since 2020"`
@@ -701,120 +787,15 @@ together in sequence.*
 
 ---
 
----
+## Changelog
 
-# 🆕 New Requirements (v2) — Updated Pipeline Design
-
-> The following section documents updated pipeline requirements that supersede parts of
-> the original design above. The original document is preserved as-is for reference.
-> These requirements are **pending implementation**.
-
----
-
-## Step 1 — Scraping *(unchanged)*
-
-Same as the original. Assume ~1000 articles scraped per run.
-
----
-
-## Step 2 — Cluster Stories *(updated scale)*
-
-Dedup, normalise, and cluster articles as before. The target output is **~700 active clusters**
-with categories already assigned.
-
----
-
-## Step 3 — OzScore *(unchanged)*
-
-Calculate OzScore for all ~700 active clusters as described in the original Stage 6.
-
----
-
-## Step 4 — Category-Based Selection *(NEW)*
-
-**What it does:** After OzScore is calculated, instead of simply taking the top-N clusters
-globally, the pipeline selects stories **per category** to guarantee a balanced feed.
-The goal is to select **~105 stories** (approximately the top 14% of ~700 clusters).
-
-### Why category quotas?
-
-Without quotas, a single breaking topic (e.g. an election or a market crash) could
-dominate all available slots. Category quotas ensure readers always get variety across
-business, markets, politics, world news, and lifestyle.
-
-### Category quotas
-
-For each category, take the **top-N clusters by OzScore** within that category:
-
-| Category | Stories Selected |
-|----------|-----------------|
-| Business / Companies | 25 |
-| Economy / Markets | 20 |
-| Politics / Policy | 20 |
-| World News | 15 |
-| Tech & Innovation | 10 |
-| Property / Cost of Living | 10 |
-| Light / General | 5 |
-| **Total** | **105** |
-
-### Open question
-
-> ⚠️ If a category has fewer clusters than its quota (e.g. only 3 Light/General clusters
-> exist but the quota is 5), it is not yet defined whether the gap is filled from the
-> next-highest scoring stories across all categories, or whether fewer stories are
-> simply published. **To be confirmed.**
-
----
-
-## Step 5 — Tiering *(updated)*
-
-The 105 selected clusters are sorted by OzScore and split into three tiers using
-**fixed story counts** (not percentiles). Each tier also has qualitative criteria
-describing what typically lands there.
-
-### Tier counts
-
-- **Top 22 → Tier 1**
-- **Next 42 → Tier 2**
-- **Next 41 → Tier 3**
-
-### Tier definitions
-
-| Tier | Label | Stories | Criteria |
-|------|-------|---------|----------|
-| **Tier 1** | Deep Narrative | 22 (~20%) | M&A / deals, RBA / macro / policy, major company strategy, 3+ sources, high OzScore |
-| **Tier 2** | Context | 42 (~40%) | Earnings updates, sector movements, mid-level policy, 2+ sources |
-| **Tier 3** | Minimal | 41 (~40%) | Minor updates, single source, low impact |
-
----
-
-## Step 6 — Content Generation *(updated)*
-
-**Summary and Double Click generation for Tier 1 and Tier 2. Tier 3 does NOT receive
-a Double Click explainer.**
-
-### Content produced per tier
-
-| Tier | Headline | Card Summary | Why It Matters | Double Click Explainer |
-|------|----------|--------------|----------------|----------------------|
-| **Tier 1** | ✅ (max 12 words) | ✅ (max 50 words) | ✅ (max 20 words) | ✅ 500–600 words — full narrative |
-| **Tier 2** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ 300–500 words — structured context |
-| **Tier 3** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ ~200 words — factual expansion only |
-
-### Double Click depth by tier
-
-- **Tier 1 — Full Narrative (500–600 words):**
-  Full-depth explainer following the 7-part structure (hook → facts → reasoning →
-  counterpoint → broader pattern → Australian impact → what to watch).
-
-- **Tier 2 — Structured Context (300–500 words):**
-  Shorter explainer covering what happened, the key context, and what it means
-  for Australian readers. Less narrative depth than Tier 1.
-
-- **Tier 3 — Factual Expansion (~200 words):**
-  Brief factual summary only. No narrative structure, no Australian angle framing.
-  Just the core facts expanded slightly beyond the card summary.
-
----
-
-*New requirements added: 2026-05-08. Original pipeline document above remains unchanged.*
+**v2 (2026-05-08) — Implemented:**
+- Reordered pipeline: AI summarisation moved from Stage 2 to Stage 7 (after selection)
+- Added Stage 6: Category-based selection with per-category quotas (~105 stories)
+- Tier assignment changed from percentile-based (25%/35%/40%) to fixed counts (22/42/41)
+- Double Click explainer now generated for all tiers (not just Tier 1)
+- Tier 2 target word range updated to 300–500 words
+- Tier 3 prompt rewritten for factual expansion (~200 words)
+- Guardrails now run on all tiers
+- Summariser now only processes articles in selected clusters (saves ~60–70% API costs)
+- Open question resolved: if a category has fewer clusters than its quota, leftover slots fill from the next-highest scoring clusters globally
