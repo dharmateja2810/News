@@ -698,3 +698,127 @@ Using the worked example from the OzScore section above:
 *This document reflects the pipeline as implemented in `automation/pipeline/`. Each stage
 can be run independently via `python run_pipeline.py --<stage>` or all stages can run
 together in sequence.*
+
+---
+
+---
+
+# 🆕 New Requirements (v2) — Updated Pipeline Design
+
+> The following section documents updated pipeline requirements that supersede parts of
+> the original design above. The original document is preserved as-is for reference.
+> These requirements are **pending implementation**.
+
+---
+
+## Step 1 — Scraping *(unchanged)*
+
+Same as the original. Assume ~1000 articles scraped per run.
+
+---
+
+## Step 2 — Cluster Stories *(updated scale)*
+
+Dedup, normalise, and cluster articles as before. The target output is **~700 active clusters**
+with categories already assigned.
+
+---
+
+## Step 3 — OzScore *(unchanged)*
+
+Calculate OzScore for all ~700 active clusters as described in the original Stage 6.
+
+---
+
+## Step 4 — Category-Based Selection *(NEW)*
+
+**What it does:** After OzScore is calculated, instead of simply taking the top-N clusters
+globally, the pipeline selects stories **per category** to guarantee a balanced feed.
+The goal is to select **~105 stories** (approximately the top 14% of ~700 clusters).
+
+### Why category quotas?
+
+Without quotas, a single breaking topic (e.g. an election or a market crash) could
+dominate all available slots. Category quotas ensure readers always get variety across
+business, markets, politics, world news, and lifestyle.
+
+### Category quotas
+
+For each category, take the **top-N clusters by OzScore** within that category:
+
+| Category | Stories Selected |
+|----------|-----------------|
+| Business / Companies | 25 |
+| Economy / Markets | 20 |
+| Politics / Policy | 20 |
+| World News | 15 |
+| Tech & Innovation | 10 |
+| Property / Cost of Living | 10 |
+| Light / General | 5 |
+| **Total** | **105** |
+
+### Open question
+
+> ⚠️ If a category has fewer clusters than its quota (e.g. only 3 Light/General clusters
+> exist but the quota is 5), it is not yet defined whether the gap is filled from the
+> next-highest scoring stories across all categories, or whether fewer stories are
+> simply published. **To be confirmed.**
+
+---
+
+## Step 5 — Tiering *(updated)*
+
+The 105 selected clusters are sorted by OzScore and split into three tiers using
+**fixed story counts** (not percentiles). Each tier also has qualitative criteria
+describing what typically lands there.
+
+### Tier counts
+
+- **Top 22 → Tier 1**
+- **Next 42 → Tier 2**
+- **Next 41 → Tier 3**
+
+### Tier definitions
+
+| Tier | Label | Stories | Criteria |
+|------|-------|---------|----------|
+| **Tier 1** | Deep Narrative | 22 (~20%) | M&A / deals, RBA / macro / policy, major company strategy, 3+ sources, high OzScore |
+| **Tier 2** | Context | 42 (~40%) | Earnings updates, sector movements, mid-level policy, 2+ sources |
+| **Tier 3** | Minimal | 41 (~40%) | Minor updates, single source, low impact |
+
+---
+
+## Step 6 — Content Generation *(updated)*
+
+**Summary and Double Click generation for Tier 1 and Tier 2. Tier 3 does NOT receive
+a Double Click explainer.**
+
+### Content produced per tier
+
+| Tier | Headline | Card Summary | Why It Matters | Double Click Explainer |
+|------|----------|--------------|----------------|----------------------|
+| **Tier 1** | ✅ (max 12 words) | ✅ (max 50 words) | ✅ (max 20 words) | ✅ 500–600 words — full narrative |
+| **Tier 2** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ 300–500 words — structured context |
+| **Tier 3** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ❌ |
+
+### Double Click depth by tier
+
+- **Tier 1 — Full Narrative (500–600 words):**
+  Full-depth explainer following the 7-part structure (hook → facts → reasoning →
+  counterpoint → broader pattern → Australian impact → what to watch).
+
+- **Tier 2 — Structured Context (300–500 words):**
+  Shorter explainer covering what happened, the key context, and what it means
+  for Australian readers. Less narrative depth than Tier 1.
+
+- **Tier 3 — No Double Click.**
+
+### Open question
+
+> ⚠️ The tier table in the original requirements diagram listed "~200 words — factual
+> expansion only" for Tier 3, but Step 6 in the same diagram states "Tier 3 not having
+> a double click." **To be confirmed** which is correct before implementation.
+
+---
+
+*New requirements added: 2026-05-08. Original pipeline document above remains unchanged.*
