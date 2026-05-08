@@ -799,7 +799,7 @@ a Double Click explainer.**
 |------|----------|--------------|----------------|----------------------|
 | **Tier 1** | ✅ (max 12 words) | ✅ (max 50 words) | ✅ (max 20 words) | ✅ 500–600 words — full narrative |
 | **Tier 2** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ 300–500 words — structured context |
-| **Tier 3** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ❌ |
+| **Tier 3** | ✅ (max 12 words) | ✅ (max 100 words) | ❌ | ✅ ~200 words — factual expansion only |
 
 ### Double Click depth by tier
 
@@ -811,13 +811,9 @@ a Double Click explainer.**
   Shorter explainer covering what happened, the key context, and what it means
   for Australian readers. Less narrative depth than Tier 1.
 
-- **Tier 3 — No Double Click.**
-
-### Open question
-
-> ⚠️ The tier table in the original requirements diagram listed "~200 words — factual
-> expansion only" for Tier 3, but Step 6 in the same diagram states "Tier 3 not having
-> a double click." **To be confirmed** which is correct before implementation.
+- **Tier 3 — Factual Expansion (~200 words):**
+  Brief factual summary only. No narrative structure, no Australian angle framing.
+  Just the core facts expanded slightly beyond the card summary.
 
 ---
 
