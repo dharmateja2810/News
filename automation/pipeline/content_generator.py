@@ -64,8 +64,8 @@ def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
             cur.execute(
                 """
                 INSERT INTO cluster_content
-                    (id, cluster_id, headline, summary, why_it_matters, double_click, tier, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+                    (id, cluster_id, headline, summary, why_it_matters, double_click, tier, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending', NOW(), NOW())
                 ON CONFLICT (cluster_id) DO UPDATE SET
                     headline      = EXCLUDED.headline,
                     summary       = EXCLUDED.summary,
@@ -80,7 +80,7 @@ def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
                     cluster_id,
                     result["headline"],
                     result["card_summary"],
-                    result["why_it_matters"],
+                    result["why_it_matters"] or "",
                     result["explainer_body"],
                     tier,
                 ),

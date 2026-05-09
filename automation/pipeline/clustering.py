@@ -118,8 +118,9 @@ def _create_cluster(conn, article: dict) -> str:
             """
             INSERT INTO story_clusters
               (id, topic, category, first_seen_at, last_updated_at, article_count,
-               unique_source_count, status)
-            VALUES (%s, %s, %s, %s, %s, 1, 1, 'active')
+               unique_source_count, has_paywalled, opinion_ratio, cluster_quality,
+               oz_score, oz_score_morning, oz_score_evening, status)
+            VALUES (%s, %s, %s, %s, %s, 1, 1, false, 0.0, 0.0, 0.0, 0.0, 0.0, 'active')
             """,
             (cluster_id, article["title"], article.get("category", "Business & Companies"), first_seen, now),
         )
