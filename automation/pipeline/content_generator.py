@@ -10,6 +10,7 @@ Usage:
 
 import argparse
 import logging
+import uuid
 
 from db import get_connection, dict_cursor, release_connection, close_pool
 from explainer import generate_for_cluster
@@ -59,11 +60,12 @@ def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            content_id = str(uuid.uuid4())
             cur.execute(
                 """
                 INSERT INTO cluster_content
-                    (cluster_id, headline, summary, why_it_matters, double_click, tier, status)
-                VALUES (%s, %s, %s, %s, %s, %s, 'pending')
+                    (id, cluster_id, headline, summary, why_it_matters, double_click, tier, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
                 ON CONFLICT (cluster_id) DO UPDATE SET
                     headline      = EXCLUDED.headline,
                     summary       = EXCLUDED.summary,
@@ -74,6 +76,7 @@ def _write_cluster_content(cluster_id: str, tier: int, result: dict) -> None:
                     updated_at    = NOW()
                 """,
                 (
+                    content_id,
                     cluster_id,
                     result["headline"],
                     result["card_summary"],

@@ -2,19 +2,18 @@
 Pipeline orchestrator — runs all pipeline stages in sequence.
 
 Usage:
-  python run_pipeline.py              # full pipeline (scrape → normalise → dedup → cluster → score → select → summarise → content)
+  python run_pipeline.py              # full pipeline (scrape → normalise → dedup → cluster → score → select → content)
   python run_pipeline.py --scrape     # only scrape
   python run_pipeline.py --normalise  # only normalise
   python run_pipeline.py --dedup      # only dedup
   python run_pipeline.py --cluster    # only cluster + archive
   python run_pipeline.py --score      # only score
   python run_pipeline.py --select     # only category selection + tier assignment
-  python run_pipeline.py --summarise  # only AI summarisation (selected clusters only)
   python run_pipeline.py --content    # only content generation
 
 Cron examples:
   */15 * * * * cd /path/to/pipeline && python run_pipeline.py --scrape --normalise
-  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score --select --summarise --content
+  */30 * * * * cd /path/to/pipeline && python run_pipeline.py --dedup --cluster --score --select --content
   0 */6 * * *  cd /path/to/pipeline && python run_pipeline.py   # full pass every 6h
 """
 
@@ -103,15 +102,6 @@ def run_select():
     return result
 
 
-def run_summarise():
-    logger.info("=== STAGE 7: AI Summarisation (selected clusters only) ===")
-    from summariser import summarise_articles
-    t0 = time.time()
-    n = summarise_articles()
-    logger.info("Summarise complete in %.1fs — %d articles summarised", time.time() - t0, n)
-    return n
-
-
 def run_content():
     logger.info("=== STAGE 8: Content Generation ===")
     from content_generator import generate_content
@@ -129,14 +119,13 @@ def main():
     parser.add_argument("--cluster",   action="store_true", help="Run clustering stage")
     parser.add_argument("--score",     action="store_true", help="Run scoring stage")
     parser.add_argument("--select",    action="store_true", help="Run category selection + tier assignment")
-    parser.add_argument("--summarise", action="store_true", help="Run AI summarisation (selected clusters only)")
     parser.add_argument("--content",   action="store_true", help="Run content generation stage")
     args = parser.parse_args()
 
     run_all = not any([
         args.scrape, args.normalise, args.dedup,
         args.cluster, args.score, args.select,
-        args.summarise, args.content,
+        args.content,
     ])
 
     t_start = time.time()
@@ -155,8 +144,6 @@ def main():
             run_score()
         if run_all or args.select:
             run_select()
-        if run_all or args.summarise:
-            run_summarise()
         if run_all or args.content:
             run_content()
     except Exception as exc:
