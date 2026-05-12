@@ -233,11 +233,12 @@ export const SearchScreen: React.FC = () => {
     const saved = isSaved(item.articleId);
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
     const hasWhyMatters = item.tier === 1 && item.whyMatters.length > 0;
+    const hasDoubleClick = (item.doubleClick ?? '').length > 0;
 
     return (
       <TouchableOpacity
         activeOpacity={1}
-        onPress={() => hasWhyMatters && handleDoubleTap(item)}
+        onPress={() => hasDoubleClick && handleDoubleTap(item)}
         style={[styles.newsItem, { height: pageHeight }]}
       >
         <View style={[styles.imageContainer, { height: imageHeight }]}>
@@ -263,8 +264,8 @@ export const SearchScreen: React.FC = () => {
           </View>
 
           <Text style={[styles.headline, { color: colors.text }]} numberOfLines={3}>{item.headline}</Text>
-          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 7 : 15}>
-            {hasWhyMatters ? item.summary : (item.doubleClick || item.summary)}
+          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 7 : 12}>
+            {item.summary}
           </Text>
 
           {hasWhyMatters && (
@@ -274,7 +275,7 @@ export const SearchScreen: React.FC = () => {
           )}
 
           <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
-            {hasWhyMatters ? (
+            {hasDoubleClick ? (
               <TouchableOpacity
                 style={[styles.viewMoreBtn, { backgroundColor: colors.accent + '20' }]}
                 onPress={() => void openDoubleClick(item)}

@@ -252,11 +252,12 @@ export const HomeScreen: React.FC = () => {
     const tierLabel = TIER_LABELS[item.tier] ?? 'STANDARD';
 
     const hasWhyMatters = item.tier === 1 && item.whyMatters.length > 0;
+    const hasDoubleClick = (item.doubleClick ?? '').length > 0;
 
     return (
       <TouchableOpacity
         activeOpacity={1}
-        onPress={() => hasWhyMatters && handleDoubleTap(item)}
+        onPress={() => hasDoubleClick && handleDoubleTap(item)}
         style={[styles.newsItem, { height: pageHeight }]}
       >
         {/* ── ILLUSTRATION ── */}
@@ -301,8 +302,8 @@ export const HomeScreen: React.FC = () => {
           </Text>
 
           {/* Summary / explainer body */}
-          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 7 : 15}>
-            {hasWhyMatters ? item.summary : (item.doubleClick || item.summary)}
+          <Text style={[styles.summary, { color: colors.textSecondary }]} numberOfLines={hasWhyMatters ? 7 : 12}>
+            {item.summary}
           </Text>
 
           {/* Why it matters */}
@@ -316,7 +317,7 @@ export const HomeScreen: React.FC = () => {
 
           {/* Bottom actions */}
           <View style={[styles.bottomRow, { borderTopColor: colors.border }]}>
-            {hasWhyMatters ? (
+            {hasDoubleClick ? (
               <TouchableOpacity
                 style={[styles.viewMoreBtn, { backgroundColor: colors.accent + '20' }]}
                 onPress={() => void openDoubleClick(item)}
